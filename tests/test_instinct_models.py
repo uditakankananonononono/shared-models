@@ -146,7 +146,8 @@ class HardeningTests(unittest.TestCase):
         try:
             NeedleLocal()._factory()
             self.assertEqual(os.environ.get("NEEDLE_TELEMETRY"), "0")
-            os.environ.pop("NEEDLE_TELEMETRY")
+            self.assertEqual(os.environ.get("DO_NOT_TRACK"), "1")
+            os.environ.pop("NEEDLE_TELEMETRY"); os.environ.pop("DO_NOT_TRACK", None)
             NeedleLocal(telemetry=True)._factory()
             self.assertIsNone(os.environ.get("NEEDLE_TELEMETRY"))
         finally:

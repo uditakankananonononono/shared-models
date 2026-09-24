@@ -8,12 +8,12 @@ Install: `pip install "git+ssh://git@github.com/uditakankananonononono/shared-mo
 
 | Component | What it is (verified) | Class | Cost |
 |---|---|---|---|
-| Inkling | Thinking Machines' open model family | `InklingLocal` runs it on her own server (llama.cpp / vLLM / SGLang). `InklingHFRouter` uses the HF router with `HF_TOKEN` and is never used for private tasks. | Free locally. The HF router has a free tier and may bill past it. |
+| Inkling | Thinking Machines' open model family | `InklingLocal` runs it on her own server (llama.cpp / vLLM / SGLang). `InklingHFRouter` uses the HF router with `HF_TOKEN` and is never used for private tasks. | Free locally. HF router: free tier, metered past it. |
 | Ornith | DeepReinforce's self-improving open models (https://ornith.ai, https://github.com/deepreinforce-ai/Ornith-1) | `OrnithOpenAICompat` runs an Ornith-1.5 GGUF through llama.cpp or Ollama (`/v1`) | Free, runs locally |
 | Needle | Cactus Compute's on-device tool-calling model (https://github.com/cactus-compute/needle) | `NeedleLocal` uses the documented `Needle(...).complete()` call. It is also the model each product fine-tunes. | Free, runs locally |
 | The AI Library | A public AI tools and prompts directory (https://www.theailibrary.co) | `AILibraryCatalog` (implements `CatalogSource`): read-only, follows robots.txt, caches results and rate-limits requests | Free |
 
-Union Alpha was removed at the user's request. The package has no paid route.
+Union Alpha was removed at the user's request. Everything runs free locally; the one hosted route (HF router) is free tier, metered past it.
 
 ## Router
 
@@ -48,4 +48,4 @@ The tests use fakes, so they need no network connection, GPU or Needle install.
 2. **Every task declares whether it's private.** Set `Task(private=True)` for anything holding personal or contract data (Atlas contracts and receipts, Meemee personal data, Sugarcode customer code). Private tasks never reach a hosted route. If nothing local is available, the router stops and reports that, rather than sending the data out.
 3. **Training data is confirmed-only, stays in its own product, and trains locally.** Products don't share datasets. Rows she rejected or never confirmed never reach training.
 4. **The AI Library is read-only.** Browsing and suggesting are fine. Submitting or listing her products on that site is a public action and is out of scope for this package.
-5. **Nothing here spends money.** There is no paid route. The HF router uses her own token and may bill past the free tier, so products should let her turn it off (`INSTINCT_ALLOW_HOSTED=0`).
+5. **Nothing here spends money on its own.** Local routes are free. The HF router is free tier, metered past it (it bills her own token), so products should let her turn it off (`INSTINCT_ALLOW_HOSTED=0`).

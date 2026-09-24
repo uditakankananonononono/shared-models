@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "instinct-models"
+version = "0.1.0"
+description = "Shared model layer for Atlas, Meemee and Sugarcode: Inkling, Ornith, Needle, AI Library catalog"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+needle = ["cactus-needle"]
+yaml = ["PyYAML>=6"]
+
+[tool.setuptools.packages.find]
+include = ["instinct_models*"]

@@ -107,12 +107,17 @@ class NeedleLocal(Provider):
     short inputs (256-token window at inference), no free-form generation."""
     name, locality = "needle-local", LOCAL
 
-    def __init__(self, weights: str | None = None, factory: Callable[..., Any] | None = None, min_confidence: float = 0.8):
+    def __init__(self, weights: str | None = None, factory: Callable[..., Any] | None = None, min_confidence: float = 0.8,
+                 telemetry: bool = False):
         self.weights, self.factory, self.min_confidence = weights, factory, min_confidence
+        # cactus-needle sends anonymous usage counts to its developers by default. Off unless opted in.
+        self.telemetry = telemetry
 
     def _factory(self):
         if self.factory:
             return self.factory
+        if not self.telemetry:
+            os.environ["NEEDLE_TELEMETRY"] = "0"
         try:
             import needle  # type: ignore  # pip install cactus-needle; import does not load JAX
         except ImportError as exc:
@@ -147,4 +152,6 @@ class NeedleLocal(Provider):
         conf = out.get("confidence")
         if calls and not self.weights and isinstance(conf, (int, float)) and conf < self.min_confidence:
             calls = []  # low confidence: let the router escalate
+        if calls and (out.get("validation") or {}).get("ungrounded"):
+            calls = []  # Needle flagged argument values not found in the query: escalate instead of trusting them
         return ChatResult(self.name, self.weights or "needle-base", "", calls, out)

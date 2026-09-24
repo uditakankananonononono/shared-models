@@ -130,3 +130,10 @@ class CatalogTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_health_probe_unreachable_never_raises():
+    from instinct_models.health import probe, hf_token_valid
+    r = probe("http://127.0.0.1:9/v1", "m")
+    assert r["ok"] is False and "error" in r
+    assert hf_token_valid(None) is False

@@ -49,3 +49,13 @@ The tests use fakes, so they need no network connection, GPU or Needle install.
 3. **Training data is confirmed-only, stays in its own product, and trains locally.** Products don't share datasets. Rows she rejected or never confirmed never reach training.
 4. **The AI Library is read-only.** Browsing and suggesting are fine. Submitting or listing her products on that site is a public action and is out of scope for this package.
 5. **Nothing here spends money on its own.** Local routes are free. The HF router is free tier, metered past it (it bills her own token), so products should let her turn it off (`INSTINCT_ALLOW_HOSTED=0`).
+
+## Needle privacy guard: sources
+
+Checked against the installed cactus-needle 3.0.5 package on 2026-09-24:
+- `needle/_telemetry.py` sends anonymous usage counts unless `NEEDLE_TELEMETRY=0` (or `DO_NOT_TRACK` / `CI` is set).
+  The package README says the engine binary needs both `NEEDLE_TELEMETRY=0` and `DO_NOT_TRACK=1`. `NeedleLocal`
+  sets both unless constructed with `telemetry=True`. Setting them changes the process environment.
+- `needle/__init__.py` (`_annotate_ungrounded`) writes `response["validation"]["ungrounded"]`, the list of
+  argument values not found in the query. `NeedleLocal` drops those calls so the router escalates.
+If a future cactus-needle release renames either, re-check these files when bumping the version.

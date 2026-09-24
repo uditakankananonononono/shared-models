@@ -117,7 +117,10 @@ class NeedleLocal(Provider):
         if self.factory:
             return self.factory
         if not self.telemetry:
+            # Verified in cactus-needle 3.0.5: needle/_telemetry.py checks NEEDLE_TELEMETRY == "0" and DO_NOT_TRACK;
+            # its package README says the engine binary needs both NEEDLE_TELEMETRY=0 and DO_NOT_TRACK=1.
             os.environ["NEEDLE_TELEMETRY"] = "0"
+            os.environ["DO_NOT_TRACK"] = "1"
         try:
             import needle  # type: ignore  # pip install cactus-needle; import does not load JAX
         except ImportError as exc:
@@ -152,6 +155,7 @@ class NeedleLocal(Provider):
         conf = out.get("confidence")
         if calls and not self.weights and isinstance(conf, (int, float)) and conf < self.min_confidence:
             calls = []  # low confidence: let the router escalate
+        # validation.ungrounded is written by needle/__init__.py _annotate_ungrounded (cactus-needle 3.0.5).
         if calls and (out.get("validation") or {}).get("ungrounded"):
             calls = []  # Needle flagged argument values not found in the query: escalate instead of trusting them
         return ChatResult(self.name, self.weights or "needle-base", "", calls, out)

@@ -28,6 +28,7 @@ class ExampleRow:
     reasoning: str | None = None
     system: str | None = None
     meta: dict = field(default_factory=dict)
+    product: str | None = None  # set by the product; rows tagged for another product are dropped
 
 
 class DomainDataset(Protocol):
@@ -64,6 +65,10 @@ def build_needle_jsonl(dataset: DomainDataset, out_path: str | Path, *, min_off_
     for row in dataset.rows():
         if not row.confirmed:
             dropped.append({"source_ref": row.source_ref, "reason": "not owner-confirmed"})
+            continue
+        if row.product is not None and row.product != dataset.product:
+            dropped.append({"source_ref": row.source_ref,
+                            "reason": f"row belongs to {row.product!r}, not {dataset.product!r}"})
             continue
         why = check_row(row)
         if why:

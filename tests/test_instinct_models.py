@@ -128,6 +128,45 @@ class CatalogTests(unittest.TestCase):
         self.assertFalse(hasattr(c, "submit"))
 
 
+class HardeningTests(unittest.TestCase):
+    def test_needle_ungrounded_call_escalates(self):
+        orn = OrnithOpenAICompat("http://o/v1", "ornith", transport=lambda u, b, h, t: oa_reply(calls=[("log_obligation", {"party": "Acme"})]))
+        bad = NeedleLocal(factory=FakeNeedle({"type": "call", "success": True, "confidence": 0.99,
+                                              "function_calls": [{"name": "log_obligation", "arguments": {"party": "Zeta"}}],
+                                              "validation": {"ungrounded": ["log_obligation.party"]}}))
+        out = Router([bad, orn]).run(Task([{"role": "user", "content": "Acme owes a report"}], tools=TOOLS))
+        self.assertEqual(out.result.provider, "ornith-local")
+        self.assertEqual(out.attempts[0].outcome, "escalated")
+
+    def test_needle_telemetry_off_by_default(self):
+        import types
+        old_env, old_mod = os.environ.pop("NEEDLE_TELEMETRY", None), sys.modules.get("needle")
+        fake = types.ModuleType("needle"); fake.Needle = FakeNeedle({})
+        sys.modules["needle"] = fake
+        try:
+            NeedleLocal()._factory()
+            self.assertEqual(os.environ.get("NEEDLE_TELEMETRY"), "0")
+            os.environ.pop("NEEDLE_TELEMETRY")
+            NeedleLocal(telemetry=True)._factory()
+            self.assertIsNone(os.environ.get("NEEDLE_TELEMETRY"))
+        finally:
+            if old_mod is None:
+                sys.modules.pop("needle", None)
+            else:
+                sys.modules["needle"] = old_mod
+            if old_env is not None:
+                os.environ["NEEDLE_TELEMETRY"] = old_env
+
+    def test_cross_product_rows_are_dropped(self):
+        rows = [ExampleRow("Acme owes a report", TOOLS, [{"name": "log_obligation", "arguments": {"party": "Acme"}}], True, "a:1", product="atlas"),
+                ExampleRow("Remind me to call mom", TOOLS, [], True, "m:1", product="meemee"),
+                ExampleRow("what's the weather", TOOLS, [], True, "neg:1")]
+        with tempfile.TemporaryDirectory() as d:
+            m = build_needle_jsonl(DS(rows), Path(d) / "atlas.jsonl")
+            self.assertEqual((m["rows"], m["dropped"]), (2, 1))
+            self.assertIn("belongs to 'meemee'", m["dropped_detail"][0]["reason"])
+
+
 if __name__ == "__main__":
     unittest.main()
 

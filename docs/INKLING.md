@@ -3,7 +3,7 @@
 Inkling-Small: Thinking Machines, Apache-2.0 open weights, 276B total / 12B active MoE,
 text + image + audio in, tool calling (https://huggingface.co/thinkingmachines/Inkling-Small).
 
-## Today, free: Hugging Face router
+## Hosted: Hugging Face router (free tier, metered past it)
 1. Free account at https://huggingface.co, then a token at https://huggingface.co/settings/tokens
    (fine-grained, permission "Make calls to Inference Providers").
 2. `export HF_TOKEN=hf_...` - `InklingHFRouter` uses it with model `thinkingmachines/Inkling-Small`.

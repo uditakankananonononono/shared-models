@@ -168,6 +168,55 @@ class HardeningTests(unittest.TestCase):
             self.assertIn("belongs to 'meemee'", m["dropped_detail"][0]["reason"])
 
 
+class NeedleEngineTests(unittest.TestCase):
+    def test_unpublished_engine_pin_is_mapped_to_published(self):
+        from types import SimpleNamespace
+        from instinct_models.providers import fix_needle_engine
+        f = SimpleNamespace(ENGINE_VERSIONS={2: "2.0.4", 3: "3.0.2"})
+        self.assertEqual(fix_needle_engine(f, env={}), "3.0.1")
+        f = SimpleNamespace(ENGINE_VERSIONS={2: "2.0.4", 3: "3.0.2"})
+        self.assertEqual(fix_needle_engine(f, env={"INSTINCT_NEEDLE_ENGINE_V3": "3.0.0"}), "3.0.0")
+        f = SimpleNamespace(ENGINE_VERSIONS={2: "2.0.4", 3: "3.0.9"})
+        self.assertEqual(fix_needle_engine(f, env={}), "3.0.9")  # unknown pins are left alone
+        self.assertIsNone(fix_needle_engine(SimpleNamespace(), env={}))
+
+    def test_falls_back_to_needle2_only_for_base_model(self):
+        from instinct_models.providers import needle_with_fallback
+        calls = []
+
+        def cls(**kw):
+            calls.append(kw)
+            if kw.get("generation") != 2:
+                raise RuntimeError("404 Entry Not Found")
+            return "agent-v2"
+        self.assertEqual(needle_with_fallback(cls)(tools=TOOLS), "agent-v2")
+        self.assertEqual(calls[-1], {"generation": 2, "tools": TOOLS})
+        with self.assertRaises(RuntimeError):
+            needle_with_fallback(cls)(tools=TOOLS, weights="tuned.cact")
+
+        def broken(**kw):
+            raise RuntimeError("no engine")
+        with self.assertRaises(ProviderUnavailable):
+            needle_with_fallback(broken)(tools=TOOLS)
+
+    def test_real_factory_applies_engine_fix(self):
+        import types
+        old = {k: sys.modules.get(k) for k in ("needle", "needle.agent", "needle.agent.fetch")}
+        fetch = types.ModuleType("needle.agent.fetch"); fetch.ENGINE_VERSIONS = {2: "2.0.4", 3: "3.0.2"}
+        agent = types.ModuleType("needle.agent"); agent.fetch = fetch
+        pkg = types.ModuleType("needle"); pkg.Needle = FakeNeedle({}); pkg.agent = agent
+        sys.modules.update({"needle": pkg, "needle.agent": agent, "needle.agent.fetch": fetch})
+        try:
+            NeedleLocal(telemetry=True)._factory()
+            self.assertEqual(fetch.ENGINE_VERSIONS[3], "3.0.1")
+        finally:
+            for k, v in old.items():
+                if v is None:
+                    sys.modules.pop(k, None)
+                else:
+                    sys.modules[k] = v
+
+
 if __name__ == "__main__":
     unittest.main()
 

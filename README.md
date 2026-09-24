@@ -59,3 +59,15 @@ Checked against the installed cactus-needle 3.0.5 package on 2026-09-24:
 - `needle/__init__.py` (`_annotate_ungrounded`) writes `response["validation"]["ungrounded"]`, the list of
   argument values not found in the query. `NeedleLocal` drops those calls so the router escalates.
 If a future cactus-needle release renames either, re-check these files when bumping the version.
+
+## Needle engine 404 workaround (cactus-needle 3.0.5)
+
+cactus-needle 3.0.5 (latest on PyPI, 2026-09-24) pins the Needle 3 engine to 3.0.2
+(`needle/agent/fetch.py`, `ENGINE_VERSIONS`), but Hugging Face `Cactus-Compute/needle3/python`
+only publishes 3.0.0 and 3.0.1 wheels, so the first `Needle()` call fails with a 404.
+`NeedleLocal` maps the unpublished 3.0.2 pin to 3.0.1 (override with `INSTINCT_NEEDLE_ENGINE_V3`).
+If Needle 3 still fails to load, it falls back to Needle 2 (engine 2.0.4, published for all platforms);
+tuned weights are never silently switched. Live-checked on linux-x86_64: both routes returned
+`get_weather(city="Lagos")` for "what's the weather in Lagos right now?" (confidence 1.0 and 0.969).
+Running the 3.0.1 engine under the 3.0.5 Python wrapper is a combination upstream did not ship.
+Remove the mapping when upstream publishes 3.0.2.

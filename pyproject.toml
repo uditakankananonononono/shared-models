@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-needle = ["cactus-needle"]
+needle = ["cactus-needle==3.0.5"]
 yaml = ["PyYAML>=6"]
 
 [tool.setuptools.packages.find]

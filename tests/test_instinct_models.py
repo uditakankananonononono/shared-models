@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from instinct_models import Router, Task, load_config
 from instinct_models.catalog import AILibraryCatalog
-from instinct_models.providers import InklingHFRouter, NeedleLocal, OrnithOpenAICompat, ProviderUnavailable
+from instinct_models.providers import (InklingHFRouter, JevEval, JevStatusError, NeedleLocal, OrnithOpenAICompat,
+                                       ProviderError, ProviderUnavailable)
 from instinct_models.training import (ExampleRow, NeedleLoRAJob, OrnithRLUnavailable, build_needle_jsonl,
                                       ornith_rl_preflight, train_needle_lora)
 
@@ -215,6 +216,74 @@ class NeedleEngineTests(unittest.TestCase):
                     sys.modules.pop(k, None)
                 else:
                     sys.modules[k] = v
+
+
+
+
+class JevTests(unittest.TestCase):
+    Q = {"is_urgent": {"type": "noul", "instructions": "Does this convey urgency?"}}
+
+    def test_unavailable_without_key(self):
+        j = JevEval(api_key="", transport=lambda *a: {})
+        self.assertFalse(j.available())
+        with self.assertRaises(ProviderUnavailable):
+            j.evaluate("state", self.Q)
+        with self.assertRaises(ProviderUnavailable):
+            j.chat([{"role": "user", "content": "hi"}])
+
+    def test_evaluate_happy_path(self):
+        seen = {}
+        def fake(url, body, headers, timeout):
+            seen.update(url=url, body=body, headers=headers)
+            return {"model": "jev-1.13.0", "answers": {"is_urgent": {"type": "noul", "noul": 0.95}},
+                    "usage": {"input_tokens": 10, "output_tokens": 2}}
+        out = JevEval(api_key="sk-test", transport=fake).evaluate("Help! Payouts failing.", self.Q)
+        self.assertEqual(seen["url"], "https://thejevai.com/v1/systemone")
+        self.assertEqual(seen["headers"]["Authorization"], "Bearer sk-test")
+        self.assertEqual(seen["body"]["model"], "jev-latest")
+        self.assertEqual(seen["body"]["state"], "Help! Payouts failing.")
+        self.assertEqual(out["answers"]["is_urgent"]["noul"], 0.95)
+        self.assertEqual(out["usage"]["input_tokens"], 10)
+
+    def test_validation(self):
+        j = JevEval(api_key="k", transport=lambda *a: {"answers": {}})
+        with self.assertRaises(ProviderError):
+            j.evaluate("s", {})
+        with self.assertRaises(ProviderError):
+            j.evaluate("s", {"q": {"type": "essay", "instructions": "x"}})
+        with self.assertRaises(ProviderError):
+            j.evaluate("s", {"q": {"type": "choice", "instructions": "x"}})  # criteria required
+        with self.assertRaises(ProviderError):
+            j.evaluate("s", {"q": {"type": "score", "instructions": "x", "criteria": ["only one level"]}})
+        with self.assertRaises(ProviderError):
+            j.evaluate("s", {"q": {"type": "noul", "instructions": "x", "criteria": ["not", "a", "map"]}})
+        ok = {"q": {"type": "choice", "instructions": "x", "criteria": {"a": "opt a", "b": "opt b"}}}
+        j.evaluate("s", ok)  # valid choice passes
+
+    def test_retry_on_429_then_success(self):
+        calls, sleeps = [], []
+        def flaky(url, body, headers, timeout):
+            calls.append(1)
+            if len(calls) < 3:
+                raise JevStatusError(429, "rate limited")
+            return {"answers": {"is_urgent": {"noul": 0.5}}}
+        out = JevEval(api_key="k", transport=flaky, sleeper=sleeps.append).evaluate("s", self.Q)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(sleeps, [1.0, 2.0])
+        self.assertEqual(out["answers"]["is_urgent"]["noul"], 0.5)
+
+    def test_429_exhausted_and_401(self):
+        def always429(*a): raise JevStatusError(429, "x")
+        with self.assertRaises(JevStatusError):
+            JevEval(api_key="k", transport=always429, sleeper=lambda s: None).evaluate("s", self.Q)
+        def always401(*a): raise JevStatusError(401, "bad key")
+        with self.assertRaisesRegex(ProviderError, "401"):
+            JevEval(api_key="k", transport=always401).evaluate("s", self.Q)
+
+    def test_config_reads_jev_key(self):
+        self.assertEqual(load_config({"INSTINCT_PRODUCT": "atlas", "INSTINCT_JEV_API_KEY": "sk-1"}).jev_api_key, "sk-1")
+        self.assertEqual(load_config({"INSTINCT_PRODUCT": "atlas", "JEV_API_KEY": "sk-2"}).jev_api_key, "sk-2")
+        self.assertIsNone(load_config({"INSTINCT_PRODUCT": "atlas"}).jev_api_key)
 
 
 if __name__ == "__main__":

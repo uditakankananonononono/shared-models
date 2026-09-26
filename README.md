@@ -12,6 +12,7 @@ Install: `pip install "git+ssh://git@github.com/uditakankananonononono/shared-mo
 | Ornith | DeepReinforce's self-improving open models (https://ornith.ai, https://github.com/deepreinforce-ai/Ornith-1) | `OrnithOpenAICompat` runs an Ornith-1.5 GGUF through llama.cpp or Ollama (`/v1`) | Free, runs locally |
 | Needle | Cactus Compute's on-device tool-calling model (https://github.com/cactus-compute/needle) | `NeedleLocal` uses the documented `Needle(...).complete()` call. It is also the model each product fine-tunes. | Free, runs locally |
 | The AI Library | A public AI tools and prompts directory (https://www.theailibrary.co) | `AILibraryCatalog` (implements `CatalogSource`): read-only, follows robots.txt, caches results and rate-limits requests | Free |
+| Jev | TypeSafe AI's "System One" evaluation model (https://thejevai.com) | `JevEval`: send one state plus typed questions (choice / score / noul), get structured decisions with probabilities. It is an evaluation model, not a chat model, so it never joins the `Router` chain. | Paid credits, key-gated. Optional and OFF by default. |
 
 Union Alpha was removed at the user's request. Everything runs free locally; the one hosted route (HF router) is free tier, metered past it.
 
@@ -33,7 +34,34 @@ Union Alpha was removed at the user's request. Everything runs free locally; the
 
 ## Config
 
-Set these environment variables: `INSTINCT_PRODUCT` (atlas | meemee | sugarcode), `INSTINCT_INKLING_LOCAL_URL`, `INSTINCT_INKLING_LOCAL_MODEL`, `INSTINCT_HF_MODEL`, `INSTINCT_ORNITH_URL`, `INSTINCT_ORNITH_MODEL` (use the tag you pulled), `INSTINCT_NEEDLE_WEIGHTS`, `INSTINCT_ALLOW_HOSTED`. `HF_TOKEN` is read from the environment and never stored. You can also pass a JSON or YAML file through `load_config(path=...)`.
+Set these environment variables: `INSTINCT_PRODUCT` (atlas | meemee | sugarcode), `INSTINCT_INKLING_LOCAL_URL`, `INSTINCT_INKLING_LOCAL_MODEL`, `INSTINCT_HF_MODEL`, `INSTINCT_ORNITH_URL`, `INSTINCT_ORNITH_MODEL` (use the tag you pulled), `INSTINCT_NEEDLE_WEIGHTS`, `INSTINCT_ALLOW_HOSTED`, `INSTINCT_JEV_API_KEY` (optional; falls back to `JEV_API_KEY`). `HF_TOKEN` and the Jev key are read from the environment and never stored. You can also pass a JSON or YAML file through `load_config(path=...)`.
+
+## Jev (opt-in, paid)
+
+[Jev](https://thejevai.com) is TypeSafe AI's "System One" evaluation model: instead of generating text, it evaluates one piece of state against typed questions and returns decisions software can branch on. Question types (per https://thejevai.com/docs): `choice` (pick one of up to 255 options), `score` (rate on an ordered 2-10 level rubric) and `noul` (yes probability). Multiple questions are evaluated in parallel per request.
+
+Facts checked on 2026-09-26:
+
+- Endpoint `POST https://thejevai.com/v1/systemone`, `Authorization: Bearer <key>`, model `jev-latest`.
+- Keys are created at https://thejevai.com/settings/apikeys.
+- It is **paid**: https://thejevai.com/pricing lists a $10 one-time Starter tier (100,000 credits) and up; no free tier is offered.
+- The same model is also listed on the Vercel AI Gateway as `typesafe-ai/jev` ($0.042 per 1M input tokens, https://vercel.com/ai-gateway/models/jev), which needs a Vercel AI Gateway key. This package talks to the direct Jev API; the gateway route is documented here for completeness only.
+- Jev cannot generate text. It is not in the chat `Router` chain; call `JevEval.evaluate(...)` directly.
+
+Setup (OFF by default - without a key nothing calls it and nothing can be billed):
+
+```python
+from instinct_models import JevEval
+jev = JevEval()  # reads JEV_API_KEY, or INSTINCT_JEV_API_KEY via ProductConfig.jev_api_key
+if jev.available():
+    out = jev.evaluate(
+        "Help! My payouts have been failing for 3 days.",
+        {"department": {"type": "choice", "instructions": "Which team should handle this?",
+                        "criteria": {"billing": "Payments, refunds", "technical": "Bugs, outages"}}})
+    print(out["answers"], out["usage"])
+```
+
+Retries: 429 and 529 are retried with exponential backoff (per the Jev docs); 401 raises a clear "key missing or invalid" error. It is a hosted third-party route: never send private state to it.
 
 ## Tests
 

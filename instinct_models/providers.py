@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 LOCAL, HOSTED = "local", "hosted"
 
@@ -93,6 +94,54 @@ class InklingLocal(_OpenAICompat):
 class OrnithOpenAICompat(_OpenAICompat):
     """Ornith-1.5 GGUF served locally by llama.cpp or Ollama (OpenAI-compatible /v1)."""
     name, locality = "ornith-local", LOCAL
+
+
+def require_loopback_url(url: str) -> str:
+    """Refuse nonlocal and credential-bearing URLs for privileged/local agent routes."""
+    u = urlsplit(url)
+    if (u.scheme != "http" or u.hostname not in ("127.0.0.1", "localhost", "::1")
+            or u.username or u.password or not u.port or u.query or u.fragment):
+        raise ProviderUnavailable("local agent endpoint must be http on loopback with an explicit port")
+    return url.rstrip("/")
+
+
+class HermesLocal(_OpenAICompat):
+    """Hermes open weights served by local Ollama's /v1; not the Hermes Agent CLI."""
+    name, locality = "hermes-local", LOCAL
+
+    def available(self) -> bool:
+        return super().available() and bool(self.base_url and self._local_url())
+
+    def _local_url(self) -> str:
+        return require_loopback_url(self.base_url)
+
+    def chat(self, messages, *, tools=None, max_tokens=1024):
+        self._local_url()
+        return super().chat(messages, tools=tools, max_tokens=max_tokens)
+
+
+class OpenClawOwner(_OpenAICompat):
+    """Explicit owner-only call, NEVER included in automatic Router chains.
+
+    OpenClaw bearer tokens confer full operator rights. The caller must authenticate
+    the product user and pass owner_confirmed=True for every invocation. This is not
+    a model provider fallback or a public API endpoint.
+    """
+    name, locality = "openclaw-owner", LOCAL
+
+    def __init__(self, base_url: str, token: str, model: str = "openclaw/default", **kwargs):
+        if not token:
+            raise ProviderUnavailable("OpenClaw owner token required")
+        if model != "openclaw/default":
+            raise ProviderUnavailable("only the default OpenClaw agent is supported")
+        super().__init__(require_loopback_url(base_url), model, token, **kwargs)
+
+    def chat(self, messages, *, tools=None, max_tokens=1024, owner_confirmed: bool = False):
+        if not owner_confirmed:
+            raise ProviderUnavailable("explicit authenticated owner invocation required")
+        if tools:
+            raise ProviderUnavailable("external tool schemas cannot be sent to OpenClaw owner bridge")
+        return super().chat(messages, tools=None, max_tokens=max_tokens)
 
 
 class InklingHFRouter(_OpenAICompat):

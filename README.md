@@ -90,3 +90,39 @@ tuned weights are never silently switched. Live-checked on linux-x86_64: both ro
 `get_weather(city="Lagos")` for "what's the weather in Lagos right now?" (confidence 1.0 and 0.969).
 Running the 3.0.1 engine under the 3.0.5 Python wrapper is a combination upstream did not ship.
 Remove the mapping when upstream publishes 3.0.2.
+
+## OpenClaw and Hermes, local-only
+
+Hermes 3 open weights are a real optional inference route. Run local Ollama, pull
+`hermes3:3b` (2 GB download, or `hermes3:8b`, 4.7 GB), and set
+`INSTINCT_HERMES_URL=http://127.0.0.1:11434/v1`,
+`INSTINCT_HERMES_MODEL=hermes3:3b`, `INSTINCT_ALLOW_HOSTED=0`.
+`Router.from_config()` tries it after Ornith and Inkling local, before any hosted
+router. No subscription or card is needed, but the user must provide a machine
+with enough RAM, disk and compute. Requests are refused if the configured URL
+is not loopback HTTP with an explicit port; local startup and pulling weights
+are not automated in this repository. Source: https://ollama.com/library/hermes3 .
+
+`OpenClawOwner` is an **explicit owner-only bridge**, not a model fallback.
+It calls OpenClaw's real `/v1/chat/completions` endpoint at a loopback URL
+with a gateway bearer token and `model=openclaw/default`. The gateway must
+be separately installed, set up with a free local model, and its disabled-by-default
+`gateway.http.endpoints.chatCompletions.enabled` endpoint enabled. Its bearer
+token is full operator authority. Only call after your product authenticates
+that the current requester is the owner and pass `owner_confirmed=True`; never
+expose the bridge in a public endpoint, share this token, or put OpenClaw in
+an automatic fallback chain. `OpenClawOwner` refuses remote URLs and external
+tool schemas, but it does **not** constrain the gateway's own tools. An
+unconfigured gateway or missing owner auth means it is not active. Sources:
+https://docs.openclaw.ai/gateway/openai-http-api and
+https://docs.openclaw.ai/gateway/security .
+
+Hermes Agent (https://github.com/NousResearch/hermes-agent) is **not** the
+Hermes 3 model. It is a separate agent runtime, capable of using Ollama via a
+local custom endpoint; its `hermes chat --query-file - --oneshot` CLI is not
+registered as an inference provider. That CLI may invoke its own terminal and
+browser tools, and its provider settings may point to paid services, so an
+implicit product-to-agent fallback would be unsafe and would violate free-only.
+The model route above does not claim to install or run Hermes Agent. Sources:
+https://hermes-agent.nousresearch.com/docs/guides/local-ollama-setup and
+https://hermes-agent.nousresearch.com/docs/reference/cli-commands .

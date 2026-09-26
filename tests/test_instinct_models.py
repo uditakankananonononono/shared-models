@@ -314,3 +314,44 @@ def test_health_probe_unreachable_never_raises():
     r = probe("http://127.0.0.1:9/v1", "m")
     assert r["ok"] is False and "error" in r
     assert hf_token_valid(None) is False
+
+class FreeLocalIntegrationsTests(unittest.TestCase):
+    def test_hermes_local_routes_without_paid_key(self):
+        from instinct_models import HermesLocal
+        seen = []
+        p = HermesLocal("http://127.0.0.1:11434/v1", "hermes3:3b",
+                        transport=lambda u,b,h,t: seen.append((u,b,h)) or oa_reply("local answer"))
+        r = Router([p]).run(Task([{"role":"user","content":"hello"}], private=True))
+        self.assertTrue(r.ok)
+        self.assertEqual(r.result.text, "local answer")
+        self.assertEqual(seen[0][0], "http://127.0.0.1:11434/v1/chat/completions")
+        self.assertEqual(seen[0][1]["model"], "hermes3:3b")
+        self.assertNotIn("Authorization", seen[0][2])
+
+    def test_hermes_and_openclaw_refuse_remote_endpoints(self):
+        from instinct_models import HermesLocal, OpenClawOwner
+        for url in ("https://api.provider.example/v1", "http://192.168.1.2:11434/v1",
+                    "http://user:pass@localhost:11434/v1"):
+            with self.subTest(url=url):
+                with self.assertRaises(ProviderUnavailable):
+                    HermesLocal(url, "hermes3:3b", transport=lambda *a: oa_reply()).chat([{"role":"user","content":"x"}])
+                with self.assertRaises(ProviderUnavailable):
+                    OpenClawOwner(url, "secret")
+
+    def test_openclaw_requires_owner_and_is_never_in_auto_chain(self):
+        from instinct_models import OpenClawOwner
+        seen=[]
+        p = OpenClawOwner("http://localhost:18789/v1", "secret",
+                          transport=lambda u,b,h,t: seen.append((u,b,h)) or oa_reply("done"))
+        with self.assertRaises(ProviderUnavailable):
+            p.chat([{"role":"user","content":"x"}])
+        with self.assertRaises(ProviderUnavailable):
+            p.chat([{"role":"user","content":"x"}], tools=TOOLS, owner_confirmed=True)
+        self.assertEqual(p.chat([{"role":"user","content":"x"}], owner_confirmed=True).text, "done")
+        self.assertEqual(seen[0][1]["model"], "openclaw/default")
+        self.assertEqual(seen[0][2]["Authorization"], "Bearer secret")
+        cfg = load_config({"INSTINCT_PRODUCT":"atlas", "INSTINCT_HERMES_URL":"http://localhost:11434/v1",
+                           "INSTINCT_HERMES_MODEL":"hermes3:3b", "INSTINCT_ALLOW_HOSTED":"0"})
+        names = [x.name for x in Router.from_config(cfg).providers]
+        self.assertIn("hermes-local", names)
+        self.assertNotIn("openclaw-owner", names)

@@ -120,6 +120,22 @@ class HermesLocal(_OpenAICompat):
         return super().chat(messages, tools=tools, max_tokens=max_tokens)
 
 
+def _openclaw_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
+    """No redirects: never send privileged operator bearer to another origin."""
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+            raise ProviderError(f"OpenClaw endpoint redirected (HTTP {code}); refusing to forward bearer")
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", **headers})
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        raise ProviderError(f"OpenClaw HTTP {exc.code}") from exc
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+        raise ProviderUnavailable(f"cannot reach OpenClaw loopback endpoint: {exc}") from exc
+
+
 class OpenClawOwner(_OpenAICompat):
     """Explicit owner-only call, NEVER included in automatic Router chains.
 
@@ -134,6 +150,7 @@ class OpenClawOwner(_OpenAICompat):
             raise ProviderUnavailable("OpenClaw owner token required")
         if model != "openclaw/default":
             raise ProviderUnavailable("only the default OpenClaw agent is supported")
+        kwargs.setdefault("transport", _openclaw_http)
         super().__init__(require_loopback_url(base_url), model, token, **kwargs)
 
     def chat(self, messages, *, tools=None, max_tokens=1024, owner_confirmed: bool = False):

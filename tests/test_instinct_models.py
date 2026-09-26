@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from subprocess import CompletedProcess
 
@@ -224,7 +225,7 @@ class JevTests(unittest.TestCase):
     Q = {"is_urgent": {"type": "noul", "instructions": "Does this convey urgency?"}}
 
     def test_unavailable_without_key(self):
-        j = JevEval(api_key="", transport=lambda *a: {})
+        j = JevEval(api_key="", gateway_api_key="", transport=lambda *a: {})
         self.assertFalse(j.available())
         with self.assertRaises(ProviderUnavailable):
             j.evaluate("state", self.Q)
@@ -238,12 +239,30 @@ class JevTests(unittest.TestCase):
             return {"model": "jev-1.13.0", "answers": {"is_urgent": {"type": "noul", "noul": 0.95}},
                     "usage": {"input_tokens": 10, "output_tokens": 2}}
         out = JevEval(api_key="sk-test", transport=fake).evaluate("Help! Payouts failing.", self.Q)
-        self.assertEqual(seen["url"], "https://thejevai.com/v1/systemone")
+        self.assertEqual(seen["url"], "https://api.typesafe.ai/v1/systemone")
         self.assertEqual(seen["headers"]["Authorization"], "Bearer sk-test")
         self.assertEqual(seen["body"]["model"], "jev-latest")
         self.assertEqual(seen["body"]["state"], "Help! Payouts failing.")
         self.assertEqual(out["answers"]["is_urgent"]["noul"], 0.95)
         self.assertEqual(out["usage"]["input_tokens"], 10)
+
+    def test_gateway_preferred_and_direct_alternate(self):
+        seen = {}
+        def fake(url, body, headers, timeout):
+            seen.update(url=url, body=body, headers=headers)
+            return {"answers": {"is_urgent": {"type": "noul", "noul": 0.5}}}
+        with mock.patch.dict(os.environ, {"AI_GATEWAY_API_KEY": "gw-test"}):
+            j = JevEval(api_key="direct-test", transport=fake)
+            self.assertTrue(j.available())
+            j.evaluate("state", self.Q)
+        self.assertEqual(seen["url"], "https://ai-gateway.vercel.sh/typesafe/v1/systemone")
+        self.assertEqual(seen["body"]["model"], "typesafe-ai/jev")
+        self.assertEqual(seen["headers"]["Authorization"], "Bearer gw-test")
+        j = JevEval(api_key="direct-test", gateway_api_key="", transport=fake)
+        j.evaluate("state", self.Q)
+        self.assertEqual(seen["url"], "https://api.typesafe.ai/v1/systemone")
+        self.assertEqual(seen["body"]["model"], "jev-latest")
+        self.assertEqual(seen["headers"]["Authorization"], "Bearer direct-test")
 
     def test_validation(self):
         j = JevEval(api_key="k", transport=lambda *a: {"answers": {}})

@@ -1,0 +1,39 @@
+test_catalog_cache_rate_limit_empty_and_invalid (test_boundaries.BoundaryTests) ... ok
+test_catalog_origin_boundary (test_boundaries.BoundaryTests) ... ERROR
+test_guard_before_availability (test_boundaries.BoundaryTests) ... ok
+test_http_redirect_and_decode_errors (test_boundaries.BoundaryTests) ... ok
+test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) ... test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) ... ok
+test_valid_loopback_and_remote_opt_in (test_boundaries.BoundaryTests) ... ok
+test_valid_text_and_tools (test_boundaries.BoundaryTests) ... ok
+
+======================================================================
+ERROR: test_catalog_origin_boundary (test_boundaries.BoundaryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 126, in test_catalog_origin_boundary
+    self.assertEqual([i.url for i in cat.browse()],valid[:2]+['https://www.theailibrary.co/prompts/good'])
+  File "/home/sandbox/shared-models/instinct_models/catalog.py", line 127, in browse
+    full = urllib.parse.urljoin(url, href)
+  File "/usr/lib/python3.10/urllib/parse.py", line 577, in urljoin
+    urlparse(url, bscheme, allow_fragments)
+  File "/usr/lib/python3.10/urllib/parse.py", line 401, in urlparse
+    splitresult = urlsplit(url, scheme, allow_fragments)
+  File "/usr/lib/python3.10/urllib/parse.py", line 523, in urlsplit
+    raise ValueError("Invalid IPv6 URL")
+ValueError: Invalid IPv6 URL
+
+======================================================================
+FAIL: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': [{'function': {'name': 'x'}}]}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 73, in test_malformed_responses_escalate_without_payload
+    self.assertEqual(out.attempts[0].outcome,'error')
+AssertionError: 'ok' != 'error'
+- ok
++ error
+
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.013s
+
+FAILED (failures=1, errors=1)

@@ -1,0 +1,19 @@
+test_published_302_is_not_silently_downgraded (test_engine_current.CurrentEngineTests) ... FAIL
+
+======================================================================
+FAIL: test_published_302_is_not_silently_downgraded (test_engine_current.CurrentEngineTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_engine_current.py", line 7, in test_published_302_is_not_silently_downgraded
+    self.assertEqual(fix_needle_engine(f,env={}), '3.0.2')
+AssertionError: '3.0.1' != '3.0.2'
+- 3.0.1
+?     ^
++ 3.0.2
+?     ^
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (failures=1)

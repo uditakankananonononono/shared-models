@@ -4,6 +4,7 @@
   or errors, escalate to Ornith (local) then Inkling local, then the HF router.
 - Generation tasks skip Needle (it does not generate prose).
 - private=True never reaches a hosted route: the chain stops instead.
+- private=True also requires an explicit provider trust policy before availability or transport.
 - Optional built-in floor: LexicalLocal (naive Bayes tool picker, tool calls only, abstains when unsure).
 - With no model configured the router returns result=None: it is a router/client, not a model.
 - Hosted HF routing is opt-in and metered past its free tier.
@@ -50,8 +51,8 @@ class Router:
     @classmethod
     def from_config(cls, cfg: ProductConfig) -> "Router":
         chain: list[Provider] = [NeedleLocal(cfg.needle_weights),
-                                 OrnithOpenAICompat(cfg.ornith_url, cfg.ornith_model),
-                                 InklingLocal(cfg.inkling_local_url, cfg.inkling_local_model)]
+                                 OrnithOpenAICompat(cfg.ornith_url, cfg.ornith_model, trusted_remote=cfg.trust_remote),
+                                 InklingLocal(cfg.inkling_local_url, cfg.inkling_local_model, trusted_remote=cfg.trust_remote)]
         if cfg.hermes_url and cfg.hermes_model:
             chain.append(HermesLocal(cfg.hermes_url, cfg.hermes_model))
         if cfg.lexical_train_jsonl:
@@ -66,16 +67,16 @@ class Router:
             if isinstance(p, NeedleLocal) and not task.tools:
                 out.attempts.append(RouteAttempt(p.name, "skipped", "not a tool-calling task"))
                 continue
-            if p.locality == HOSTED and task.private:
-                out.attempts.append(RouteAttempt(p.name, "skipped", "private task never goes to a hosted route"))
-                continue
-            if not p.available():
-                out.attempts.append(RouteAttempt(p.name, "unavailable"))
+            if task.private and not p.allows_private():
+                out.attempts.append(RouteAttempt(p.name, "skipped", "private task requires a trusted local endpoint"))
                 continue
             try:
+                if not p.available():
+                    out.attempts.append(RouteAttempt(p.name, "unavailable"))
+                    continue
                 res = p.chat(task.messages, tools=task.tools, max_tokens=task.max_tokens)
             except ProviderError as exc:
-                out.attempts.append(RouteAttempt(p.name, "error", str(exc)[:300]))
+                out.attempts.append(RouteAttempt(p.name, "error", "provider failed" if task.private else str(exc)[:300]))
                 continue
             except Exception as exc:  # noqa: BLE001 - one broken provider must not stop the chain
                 out.attempts.append(RouteAttempt(p.name, "error", f"{type(exc).__name__}: {exc}"[:300]))

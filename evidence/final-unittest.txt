@@ -1,0 +1,40 @@
+test_catalog_cache_rate_limit_empty_and_invalid (test_boundaries.BoundaryTests) ... ok
+test_catalog_origin_boundary (test_boundaries.BoundaryTests) ... ok
+test_guard_before_availability (test_boundaries.BoundaryTests) ... ok
+test_http_redirect_and_decode_errors (test_boundaries.BoundaryTests) ... ok
+test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) ... ok
+test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) ... ok
+test_valid_loopback_and_remote_opt_in (test_boundaries.BoundaryTests) ... ok
+test_valid_text_and_tools (test_boundaries.BoundaryTests) ... ok
+test_published_302_is_not_silently_downgraded (test_engine_current.CurrentEngineTests) ... ok
+test_reads_listings_respects_robots (test_instinct_models.CatalogTests) ... ok
+test_hermes_and_openclaw_refuse_remote_endpoints (test_instinct_models.FreeLocalIntegrationsTests) ... ok
+test_hermes_local_routes_without_paid_key (test_instinct_models.FreeLocalIntegrationsTests) ... ok
+test_openclaw_requires_owner_and_is_never_in_auto_chain (test_instinct_models.FreeLocalIntegrationsTests) ... ok
+test_cross_product_rows_are_dropped (test_instinct_models.HardeningTests) ... ok
+test_needle_telemetry_off_by_default (test_instinct_models.HardeningTests) ... ok
+test_needle_ungrounded_call_escalates (test_instinct_models.HardeningTests) ... ok
+test_health_probe_unreachable_never_raises (test_instinct_models.HealthTests) ... ok
+test_429_exhausted_and_401 (test_instinct_models.JevTests) ... ok
+test_config_reads_jev_key (test_instinct_models.JevTests) ... ok
+test_evaluate_happy_path (test_instinct_models.JevTests) ... ok
+test_gateway_preferred_and_direct_alternate (test_instinct_models.JevTests) ... ok
+test_retry_on_429_then_success (test_instinct_models.JevTests) ... ok
+test_unavailable_without_key (test_instinct_models.JevTests) ... ok
+test_validation (test_instinct_models.JevTests) ... ok
+test_engine_pin_preserved_unless_explicit_override (test_instinct_models.NeedleEngineTests) ... ok
+test_falls_back_to_needle2_only_for_base_model (test_instinct_models.NeedleEngineTests) ... ok
+test_real_factory_applies_engine_fix (test_instinct_models.NeedleEngineTests) ... ok
+test_config_from_env (test_instinct_models.RouterTests) ... ok
+test_needle_first_then_escalates_on_low_confidence (test_instinct_models.RouterTests) ... ok
+test_private_never_hosted_and_generation_skips_needle (test_instinct_models.RouterTests) ... ok
+test_unconfigured_providers (test_instinct_models.RouterTests) ... ok
+test_dataset_filters_and_manifest (test_instinct_models.TrainingTests) ... ok
+test_lora_runs_documented_cli_without_upload (test_instinct_models.TrainingTests) ... ok
+test_ornith_rl_refuses_without_gpu (test_instinct_models.TrainingTests) ... ok
+test_malformed_tool_calls_become_provider_error (test_needle_shapes.NeedleShapesTests) ... ok
+
+----------------------------------------------------------------------
+Ran 35 tests in 0.526s
+
+OK

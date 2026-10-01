@@ -1,0 +1,6 @@
+{"file": "python/cactus_needle-3.0.2-py3-none-manylinux2014_x86_64.whl", "revision": "27c0a9a5b3ca835e0b7dbeaccf555df03dac493d", "bytes": 537236, "sha256": "f2b8fb9ef216ee0cd286e18cc1e39f442d088e267c902ea95a00d2d2e3d0a7ef"}
+{"file": "needle3.cact", "revision": "27c0a9a5b3ca835e0b7dbeaccf555df03dac493d", "bytes": 35335380, "sha256": "c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38"}
+ENV: 3.10.12 Linux-6.1.158+-x86_64-with-glibc2.35 cactus-needle 3.0.5 engine 3.0.2
+REAL TOOL CALL: {"provider": "needle-local", "model": "needle-base", "tool_calls": [{"name": "get_weather", "arguments": {"city": "Lagos"}}], "confidence": 0.9464, "elapsed_s": 0.504}
+REAL NO-CALL: {"ok": false, "attempts": [["needle-local", "escalated", "no tool call"]]}
+DEFAULT PRODUCTION ROUTER: {"ok": true, "tool_calls": [{"name": "get_weather", "arguments": {"city": "Lagos"}}], "engine": "3.0.2"}

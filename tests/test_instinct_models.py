@@ -171,11 +171,11 @@ class HardeningTests(unittest.TestCase):
 
 
 class NeedleEngineTests(unittest.TestCase):
-    def test_unpublished_engine_pin_is_mapped_to_published(self):
+    def test_engine_pin_preserved_unless_explicit_override(self):
         from types import SimpleNamespace
         from instinct_models.providers import fix_needle_engine
         f = SimpleNamespace(ENGINE_VERSIONS={2: "2.0.4", 3: "3.0.2"})
-        self.assertEqual(fix_needle_engine(f, env={}), "3.0.1")
+        self.assertEqual(fix_needle_engine(f, env={}), "3.0.2")
         f = SimpleNamespace(ENGINE_VERSIONS={2: "2.0.4", 3: "3.0.2"})
         self.assertEqual(fix_needle_engine(f, env={"INSTINCT_NEEDLE_ENGINE_V3": "3.0.0"}), "3.0.0")
         f = SimpleNamespace(ENGINE_VERSIONS={2: "2.0.4", 3: "3.0.9"})
@@ -210,7 +210,7 @@ class NeedleEngineTests(unittest.TestCase):
         sys.modules.update({"needle": pkg, "needle.agent": agent, "needle.agent.fetch": fetch})
         try:
             NeedleLocal(telemetry=True)._factory()
-            self.assertEqual(fetch.ENGINE_VERSIONS[3], "3.0.1")
+            self.assertEqual(fetch.ENGINE_VERSIONS[3], "3.0.2")
         finally:
             for k, v in old.items():
                 if v is None:
@@ -305,15 +305,13 @@ class JevTests(unittest.TestCase):
         self.assertIsNone(load_config({"INSTINCT_PRODUCT": "atlas"}).jev_api_key)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-def test_health_probe_unreachable_never_raises():
-    from instinct_models.health import probe, hf_token_valid
-    r = probe("http://127.0.0.1:9/v1", "m")
-    assert r["ok"] is False and "error" in r
-    assert hf_token_valid(None) is False
+class HealthTests(unittest.TestCase):
+    def test_health_probe_unreachable_never_raises(self):
+        from instinct_models.health import probe, hf_token_valid
+        r = probe("http://127.0.0.1:9/v1", "m")
+        self.assertFalse(r["ok"])
+        self.assertIn("error", r)
+        self.assertFalse(hf_token_valid(None))
 
 class FreeLocalIntegrationsTests(unittest.TestCase):
     def test_hermes_local_routes_without_paid_key(self):
@@ -355,3 +353,7 @@ class FreeLocalIntegrationsTests(unittest.TestCase):
         names = [x.name for x in Router.from_config(cfg).providers]
         self.assertIn("hermes-local", names)
         self.assertNotIn("openclaw-owner", names)
+
+
+if __name__ == "__main__":
+    unittest.main()

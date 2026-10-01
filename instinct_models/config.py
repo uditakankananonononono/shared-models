@@ -9,6 +9,7 @@ Env (prefix INSTINCT_):
   INSTINCT_ORNITH_MODEL        model tag as pulled locally (no default: must match what she pulled)
   INSTINCT_NEEDLE_WEIGHTS      path to a product .cact (tuned) - empty means the base Needle model
   INSTINCT_ALLOW_HOSTED        1 to allow metered hosted HF router for non-private tasks (default 0)
+  INSTINCT_TRUST_REMOTE        1 explicitly trusts configured Ornith/Inkling remote endpoints for private tasks
   INSTINCT_JEV_API_KEY         TypeSafe AI direct evaluation API key (optional; falls back to JEV_API_KEY).
   INSTINCT_AI_GATEWAY_API_KEY  Vercel AI Gateway key for Jev (optional; falls back to AI_GATEWAY_API_KEY).
   INSTINCT_LEXICAL_TRAIN_JSONL Needle-format JSONL (from build_needle_jsonl) to train the built-in lexical tool model
@@ -39,6 +40,7 @@ class ProductConfig:
     hermes_url: str | None = None
     hermes_model: str | None = None
     allow_hosted: bool = False
+    trust_remote: bool = False
     jev_api_key: str | None = None
     extra: dict = field(default_factory=dict)
 
@@ -87,6 +89,7 @@ def load_config(env: dict | None = None, path: str | None = None) -> ProductConf
                         hf_model=g("HF_MODEL", "thinkingmachines/Inkling-Small"), ornith_url=g("ORNITH_URL"),
                         ornith_model=g("ORNITH_MODEL"), needle_weights=g("NEEDLE_WEIGHTS"), hermes_url=g("HERMES_URL"), lexical_train_jsonl=g("LEXICAL_TRAIN_JSONL"),
                         hermes_model=g("HERMES_MODEL"),
+                        trust_remote=g("TRUST_REMOTE", "0").strip().lower() in ("1", "true", "yes", "on"),
                         allow_hosted=g("ALLOW_HOSTED", "0").strip().lower() in ("1", "true", "yes", "on"),
                         jev_api_key=g("JEV_API_KEY") or e.get("JEV_API_KEY") or None)
     if path:

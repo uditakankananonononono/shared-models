@@ -1,0 +1,28 @@
+REPO Cactus-Compute/needle3 REVISION 27c0a9a5b3ca835e0b7dbeaccf555df03dac493d
+{"file": "needle3.cact", "size": 35335380, "lfs": {"size": 35335380, "sha256": "c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38", "pointer_size": 133}}
+{"file": "python/cactus_needle-3.0.0-py3-none-macosx_11_0_arm64.whl", "size": 376196, "lfs": {"size": 376196, "sha256": "f5c05efdd195c92effd8507d1259d6e509b9c5a8823939e67f2be4e83811b44b", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.0-py3-none-macosx_11_0_x86_64.whl", "size": 430782, "lfs": {"size": 430782, "sha256": "01c1d8874266013e32b539c7b154b811f8268a01e7ea992eea40e5e1d541c55a", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.0-py3-none-manylinux2014_aarch64.whl", "size": 500887, "lfs": {"size": 500887, "sha256": "653f41d440f14ad53cf0c4597fc9d960cbf059ae51a38ec0fb4f54a8873d5c0c", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.0-py3-none-manylinux2014_x86_64.whl", "size": 530108, "lfs": {"size": 530108, "sha256": "a1eae4b94675ae025ebdb380401e0d9cab1d1f6c34d4fe1251166f1ba2faf16e", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.0-py3-none-musllinux_1_2_aarch64.whl", "size": 500458, "lfs": {"size": 500458, "sha256": "4f826703197c3654ec426b3a2651057eb07496afb669c7d46f0aacf7844478a4", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.0-py3-none-musllinux_1_2_x86_64.whl", "size": 530918, "lfs": {"size": 530918, "sha256": "f2b132474722ac032269782c2fa7ec459758ab43624843be4e3b16bf7cf7abee", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.0-py3-none-win_amd64.whl", "size": 547384, "lfs": {"size": 547384, "sha256": "06fde9731929f53a7033e57f037f9262f99a3cdc2758d8d7bffae91404fb8665", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.0-py3-none-win_arm64.whl", "size": 477839, "lfs": {"size": 477839, "sha256": "5b1da56516304bbc2ba6ec819ab9e6f72aad2525f14d9327f15d2d5edc1f9423", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.1-py3-none-macosx_11_0_arm64.whl", "size": 387232, "lfs": {"size": 387232, "sha256": "161c3aacfb6e54443925b389a69eb58a1861e60af19bbdf8f39d89992c5d7436", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.1-py3-none-macosx_11_0_x86_64.whl", "size": 431615, "lfs": {"size": 431615, "sha256": "941883e51fb2530706f1a115a0ea0062bb37501edaad8a6f08b85e12c4f5ca76", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.1-py3-none-manylinux2014_aarch64.whl", "size": 517746, "lfs": {"size": 517746, "sha256": "fc0c550b64627ed20101d1ac6de736bf0d15fb592d649f24bacba4e7340fc3df", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.1-py3-none-manylinux2014_x86_64.whl", "size": 536871, "lfs": {"size": 536871, "sha256": "05770ef9a85686583968ea15f62f9ad44217e078efdaa99559d3208bb8a369b0", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.1-py3-none-musllinux_1_2_aarch64.whl", "size": 517367, "lfs": {"size": 517367, "sha256": "ec307274ed14d8a11be448e1546d3a330704a8d76a96a2f99de12ca14ed8ee64", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.1-py3-none-musllinux_1_2_x86_64.whl", "size": 537929, "lfs": {"size": 537929, "sha256": "1b2f5f560fcf8d2033c0ade7ea48d8f2f228cb17f53331bf844fcceb955440e0", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.1-py3-none-win_amd64.whl", "size": 553581, "lfs": {"size": 553581, "sha256": "7d4467726814ab18d9ce32a8a5cc23d1198a2c0557c613a00bef738121903e2f", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.1-py3-none-win_arm64.whl", "size": 493234, "lfs": {"size": 493234, "sha256": "dfa6f8c15ca979bbe7c3e0579efdd8bf7b7afc75355e063cd00e6ac7732c9896", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.2-py3-none-macosx_11_0_arm64.whl", "size": 387420, "lfs": {"size": 387420, "sha256": "aa6e730f3b3b46f103ba2bc1b268c402d497086030cce735846bee4d3abbf3d3", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.2-py3-none-macosx_11_0_x86_64.whl", "size": 431850, "lfs": {"size": 431850, "sha256": "cdec5cd39868f51204671cff18ca82d79de2809819f83284abade16088b1b779", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.2-py3-none-manylinux2014_aarch64.whl", "size": 518061, "lfs": {"size": 518061, "sha256": "d2d6d80d61e4492a633d7e7047b1c4b7b62325fa060b477107b007ac13e693f4", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.2-py3-none-manylinux2014_x86_64.whl", "size": 537236, "lfs": {"size": 537236, "sha256": "f2b8fb9ef216ee0cd286e18cc1e39f442d088e267c902ea95a00d2d2e3d0a7ef", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.2-py3-none-musllinux_1_2_aarch64.whl", "size": 517651, "lfs": {"size": 517651, "sha256": "354983a45678d3ac6ac73b55145628be4ffc779bdc1920d83d346516344a776b", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.2-py3-none-musllinux_1_2_x86_64.whl", "size": 538243, "lfs": {"size": 538243, "sha256": "d24c5af3c01f02429ba908d69cfc57a80e029a43718f5f5790d7433f9e8e3f1b", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.2-py3-none-win_amd64.whl", "size": 553681, "lfs": {"size": 553681, "sha256": "5468f63b33c145c23049501a8e78bf510bb70a408296afbe6b4c4136315529cb", "pointer_size": 131}}
+{"file": "python/cactus_needle-3.0.2-py3-none-win_arm64.whl", "size": 493507, "lfs": {"size": 493507, "sha256": "0d3896854982a7b8aaedf6251c7574a5b2c4937f1c5bcae58e571c000783c7c9", "pointer_size": 131}}
+REPO ornith-ai/Ornith-1.5-9B-GGUF REVISION abdd624b12ebf020b767fff532ff44fe552b28c3
+{"file": "Ornith-1.5-9B-Q4_K_M.gguf", "size": 5780090816, "lfs": {"size": 5780090816, "sha256": "70c112196e0b7023803c9762752e46d29e612a92c83f995bc3ba1ceb07e8fab6", "pointer_size": 135}}

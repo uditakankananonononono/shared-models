@@ -1,0 +1,572 @@
+test_catalog_cache_rate_limit_empty_and_invalid (test_boundaries.BoundaryTests) ... FAIL
+test_catalog_origin_boundary (test_boundaries.BoundaryTests) ... FAIL
+test_guard_before_availability (test_boundaries.BoundaryTests) ... FAIL
+test_http_redirect_and_decode_errors (test_boundaries.BoundaryTests) ... ERROR
+test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) ... ERROR
+test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) ... test_valid_loopback_and_remote_opt_in (test_boundaries.BoundaryTests) ... ERROR
+test_valid_text_and_tools (test_boundaries.BoundaryTests) ... ok
+
+======================================================================
+ERROR: test_http_redirect_and_decode_errors (test_boundaries.BoundaryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 105, in test_http_redirect_and_decode_errors
+    out=Router([InklingLocal(base+path,'m')]).run(Task([],private=True))
+  File "/home/sandbox/shared-models/instinct_models/router.py", line 71, in run
+    res = p.chat(task.messages, tools=task.tools, max_tokens=task.max_tokens)
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 79, in chat
+    data = self.transport(f"{self.base_url}/chat/completions", body, headers, self.timeout)
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 44, in http_json
+    return json.loads(resp.read().decode())
+  File "/usr/lib/python3.10/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "/usr/lib/python3.10/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "/usr/lib/python3.10/json/decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+======================================================================
+ERROR: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': None}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 69, in test_malformed_responses_escalate_without_payload
+    out=Router([bad,good]).run(Task([{'role':'user','content':SECRET}],private=True))
+  File "/home/sandbox/shared-models/instinct_models/router.py", line 71, in run
+    res = p.chat(task.messages, tools=task.tools, max_tokens=task.max_tokens)
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 85, in chat
+    for c in (msg.get("tool_calls") or [])]
+AttributeError: 'NoneType' object has no attribute 'get'
+
+======================================================================
+ERROR: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': [None]}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 69, in test_malformed_responses_escalate_without_payload
+    out=Router([bad,good]).run(Task([{'role':'user','content':SECRET}],private=True))
+  File "/home/sandbox/shared-models/instinct_models/router.py", line 71, in run
+    res = p.chat(task.messages, tools=task.tools, max_tokens=task.max_tokens)
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 84, in chat
+    calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 84, in <listcomp>
+    calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
+TypeError: 'NoneType' object is not subscriptable
+
+======================================================================
+ERROR: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': [{}]}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 69, in test_malformed_responses_escalate_without_payload
+    out=Router([bad,good]).run(Task([{'role':'user','content':SECRET}],private=True))
+  File "/home/sandbox/shared-models/instinct_models/router.py", line 71, in run
+    res = p.chat(task.messages, tools=task.tools, max_tokens=task.max_tokens)
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 84, in chat
+    calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 84, in <listcomp>
+    calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
+KeyError: 'function'
+
+======================================================================
+ERROR: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': [{'function': {}}]}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 69, in test_malformed_responses_escalate_without_payload
+    out=Router([bad,good]).run(Task([{'role':'user','content':SECRET}],private=True))
+  File "/home/sandbox/shared-models/instinct_models/router.py", line 71, in run
+    res = p.chat(task.messages, tools=task.tools, max_tokens=task.max_tokens)
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 84, in chat
+    calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 84, in <listcomp>
+    calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
+KeyError: 'name'
+
+======================================================================
+ERROR: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': [{'function': {'name': 'x', 'arguments': 'private-synthetic-fixture'}}]}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 69, in test_malformed_responses_escalate_without_payload
+    out=Router([bad,good]).run(Task([{'role':'user','content':SECRET}],private=True))
+  File "/home/sandbox/shared-models/instinct_models/router.py", line 71, in run
+    res = p.chat(task.messages, tools=task.tools, max_tokens=task.max_tokens)
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 84, in chat
+    calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 84, in <listcomp>
+    calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
+  File "/usr/lib/python3.10/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "/usr/lib/python3.10/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "/usr/lib/python3.10/json/decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+======================================================================
+ERROR: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 75, in test_malformed_responses_escalate_without_payload
+    out=Router([InklingLocal('http://localhost:8000/v1','m',transport=invalid)]).run(Task([],private=True))
+  File "/home/sandbox/shared-models/instinct_models/router.py", line 71, in run
+    res = p.chat(task.messages, tools=task.tools, max_tokens=task.max_tokens)
+  File "/home/sandbox/shared-models/instinct_models/providers.py", line 79, in chat
+    data = self.transport(f"{self.base_url}/chat/completions", body, headers, self.timeout)
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 74, in invalid
+    def invalid(*a): raise json.JSONDecodeError(SECRET,SECRET,0)
+json.decoder.JSONDecodeError: private-synthetic-fixture: line 1 column 1 (char 0)
+
+======================================================================
+ERROR: test_valid_loopback_and_remote_opt_in (test_boundaries.BoundaryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 40, in test_valid_loopback_and_remote_opt_in
+    p=InklingLocal('https://external.example/v1','m',trusted_remote=True,transport=lambda *a: reply())
+TypeError: _OpenAICompat.__init__() got an unexpected keyword argument 'trusted_remote'
+
+======================================================================
+FAIL: test_catalog_cache_rate_limit_empty_and_invalid (test_boundaries.BoundaryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 135, in test_catalog_cache_rate_limit_empty_and_invalid
+    self.assertEqual(c.browse(limit=0),[])
+AssertionError: Lists differ: [CatalogItem(title='Tool X', url='https://[64 chars]co')] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+CatalogItem(title='Tool X', url='https://www.theailibrary.co/tools/x', kind='tool', source='theailibrary.co')
+
++ []
+- [CatalogItem(title='Tool X',
+-              url='https://www.theailibrary.co/tools/x',
+-              kind='tool',
+-              source='theailibrary.co')]
+
+======================================================================
+FAIL: test_catalog_origin_boundary (test_boundaries.BoundaryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 123, in test_catalog_origin_boundary
+    self.assertEqual([i.url for i in cat.browse()],valid[:2]+['https://www.theailibrary.co/prompts/good'])
+AssertionError: Lists differ: ['htt[117 chars]good', 'https://eviltheailibrary.co/tools/evil[269 chars]dit'] != ['htt[117 chars]good']
+
+First list contains 7 additional elements.
+First extra element 3:
+'https://eviltheailibrary.co/tools/evil'
+
+  ['https://theailibrary.co/tools/good',
+   'https://www.theailibrary.co:443/tools/good',
+-  'https://www.theailibrary.co/prompts/good',
+?                                            ^
+
++  'https://www.theailibrary.co/prompts/good']
+?                                            ^
+
+-  'https://eviltheailibrary.co/tools/evil',
+-  'http://www.theailibrary.co/tools/evil',
+-  'https://www.theailibrary.co:444/tools/evil',
+-  'https://user:pass@www.theailibrary.co/tools/evil',
+-  'https://@www.theailibrary.co/tools/evil',
+-  'https://www.theailibrary.co:bad/tools/evil',
+-  'https://www.theailibrary.co/account/edit']
+
+======================================================================
+FAIL: test_guard_before_availability (test_boundaries.BoundaryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 55, in test_guard_before_availability
+    self.assertFalse(Router([Unsafe()]).run(Task([],private=True)).ok)
+  File "/home/sandbox/shared-models/instinct_models/router.py", line 67, in run
+    if not p.available():
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 53, in available
+    def available(self): raise AssertionError('availability must not run')
+AssertionError: availability must not run
+
+======================================================================
+FAIL: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': {}}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 71, in test_malformed_responses_escalate_without_payload
+    self.assertEqual(out.attempts[0].outcome,'error')
+AssertionError: 'ok' != 'error'
+- ok
++ error
+
+
+======================================================================
+FAIL: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': [{'function': {'name': 3}}]}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 71, in test_malformed_responses_escalate_without_payload
+    self.assertEqual(out.attempts[0].outcome,'error')
+AssertionError: 'ok' != 'error'
+- ok
++ error
+
+
+======================================================================
+FAIL: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': [{'function': {'name': 'x', 'arguments': '[]'}}]}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 71, in test_malformed_responses_escalate_without_payload
+    self.assertEqual(out.attempts[0].outcome,'error')
+AssertionError: 'ok' != 'error'
+- ok
++ error
+
+
+======================================================================
+FAIL: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': [{'function': {'name': 'x', 'arguments': {}}}]}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 71, in test_malformed_responses_escalate_without_payload
+    self.assertEqual(out.attempts[0].outcome,'error')
+AssertionError: 'ok' != 'error'
+- ok
++ error
+
+
+======================================================================
+FAIL: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 'ok', 'tool_calls': [{'function': {'name': 'x', 'arguments': 'null'}}]}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 71, in test_malformed_responses_escalate_without_payload
+    self.assertEqual(out.attempts[0].outcome,'error')
+AssertionError: 'ok' != 'error'
+- ok
++ error
+
+
+======================================================================
+FAIL: test_malformed_responses_escalate_without_payload (test_boundaries.BoundaryTests) (data={'choices': [{'message': {'content': 42}}]})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 71, in test_malformed_responses_escalate_without_payload
+    self.assertEqual(out.attempts[0].outcome,'error')
+AssertionError: 'ok' != 'error'
+- ok
++ error
+
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='https://external.example/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://192.168.1.2:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost.evil:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://127.0.0.1.evil:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://2130706433:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://0177.0.0.1:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://127.1:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://0x7f000001:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://user:pass@localhost:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://@localhost:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost:8000/v1?x=1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost:8000/v1#x')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost:bad/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost:65536/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost:0/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost:8000/v1?')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost:8000/v1#')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='http://localhost.:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='InklingLocal', url='https://localhost:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='https://external.example/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://192.168.1.2:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost.evil:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://127.0.0.1.evil:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://2130706433:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://0177.0.0.1:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://127.1:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://0x7f000001:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://user:pass@localhost:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://@localhost:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost:8000/v1?x=1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost:8000/v1#x')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost:bad/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost:65536/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost:0/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost:8000/v1?')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost:8000/v1#')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='http://localhost.:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_private_endpoint_guard_before_transport (test_boundaries.BoundaryTests) (cls='OrnithOpenAICompat', url='https://localhost:8000/v1')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/sandbox/shared-models/tests/test_boundaries.py", line 34, in test_private_endpoint_guard_before_transport
+    self.assertFalse(Router([p]).run(Task([{'role':'user','content':SECRET}], private=True)).ok)
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.512s
+
+FAILED (failures=49, errors=8)

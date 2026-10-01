@@ -31,3 +31,13 @@ Weights are public (not gated), so no HF token is needed to download.
 ## Fine-tuning Inkling
 Needs Thinking Machines' Tinker service (paid) or 180 GB+ of GPU memory. Not part of this
 package; per-product training here is Needle LoRA.
+
+## Current rebuild boundary (2026-10-01)
+
+No real Inkling inference was run in this ~2 GiB CPU-only environment. The cited
+Unsloth page returned HTTP 403 when rechecked; the ~89 GB 2-bit floor above is
+inherited documentation, not a new measured result. Nothing was substituted.
+For private calls to a remote self-hosted vLLM server, explicitly set
+`INSTINCT_TRUST_REMOTE=1` only after trusting that endpoint, or use
+`InklingLocal(url, model, trusted_remote=True)`. The default private policy is
+loopback HTTP with an explicit port; hosted HF routing never handles private data.

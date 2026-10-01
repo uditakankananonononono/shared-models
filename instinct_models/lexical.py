@@ -204,6 +204,9 @@ class LexicalLocal(Provider):
     def __init__(self, model: LexicalToolModel | None = None):
         self.model = model
 
+    def allows_private(self) -> bool:
+        return True  # in-process classifier, no network transport
+
     def available(self) -> bool:
         return self.model is not None and self.model.trained_rows > 0
 

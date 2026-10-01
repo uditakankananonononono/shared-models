@@ -1,5 +1,4 @@
-"""Providers. All are free routes: local/self-hosted servers, the HF router on her own
-HF_TOKEN (free tier; the router may bill beyond it - see README), and on-device Needle."""
+"""Local/self-hosted model providers and explicitly enabled hosted routes."""
 from __future__ import annotations
 
 import json
@@ -36,21 +35,33 @@ class ChatResult:
 Transport = Callable[[str, dict, dict, float], dict]
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+        raise ProviderError(f"endpoint redirected (HTTP {code}); refusing redirect")
+
+
 def http_json(url: str, body: dict, headers: dict, timeout: float) -> dict:
+    """No redirects and no request, URL, bearer or response bodies in errors."""
     req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                  headers={"Content-Type": "application/json", **headers})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect()).open(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
-        raise ProviderError(f"HTTP {exc.code} from {url}: {exc.read()[:300]!r}") from exc
-    except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
-        raise ProviderUnavailable(f"cannot reach {url}: {exc}") from exc
+        raise ProviderError(f"provider HTTP {exc.code}") from None
+    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
+        raise ProviderUnavailable("provider endpoint unreachable") from None
+    except (ValueError, UnicodeError):
+        raise ProviderError("provider returned invalid JSON") from None
 
 
 class Provider(ABC):
     name = "provider"
     locality = LOCAL
+
+    def allows_private(self) -> bool:
+        """Fail closed unless a concrete provider defines its private trust policy."""
+        return False
 
     @abstractmethod
     def available(self) -> bool:
@@ -63,8 +74,25 @@ class Provider(ABC):
 
 class _OpenAICompat(Provider):
     def __init__(self, base_url: str | None, model: str | None, api_key: str | None = None,
-                 transport: Transport = http_json, timeout: float = 120):
+                 transport: Transport = http_json, timeout: float = 120, *, trusted_remote: bool = False):
+        self.trusted_remote = trusted_remote
         self.base_url, self.model, self.api_key, self.transport, self.timeout = (base_url or "").rstrip("/"), model, api_key, transport, timeout
+
+    def allows_private(self) -> bool:
+        if self.locality != LOCAL:
+            return False
+        try:
+            if self.trusted_remote:
+                u = urlsplit(self.base_url)
+                return (u.scheme in ("http", "https") and bool(u.hostname)
+                        and u.username is None and u.password is None
+                        and "?" not in self.base_url and "#" not in self.base_url
+                        and (u.port is None or 0 < u.port <= 65535)
+                        and not any(ch.isspace() or ord(ch) < 32 for ch in self.base_url))
+            require_loopback_url(self.base_url)
+            return True
+        except (ValueError, ProviderUnavailable):
+            return False
 
     def available(self) -> bool:
         return bool(self.base_url and self.model)
@@ -76,14 +104,38 @@ class _OpenAICompat(Provider):
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-        data = self.transport(f"{self.base_url}/chat/completions", body, headers, self.timeout)
         try:
+            data = self.transport(f"{self.base_url}/chat/completions", body, headers, self.timeout)
+            if not isinstance(data, dict) or not isinstance(data.get("choices"), list):
+                raise ValueError()
             msg = data["choices"][0]["message"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise ProviderError(f"{self.name}: unexpected response shape") from exc
-        calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
-                 for c in (msg.get("tool_calls") or [])]
-        return ChatResult(self.name, self.model, msg.get("content") or "", calls, data)
+            if not isinstance(msg, dict):
+                raise ValueError()
+            content = msg.get("content")
+            if content is not None and not isinstance(content, str):
+                raise ValueError()
+            raw_calls = msg.get("tool_calls", [])
+            if raw_calls is None:
+                raw_calls = []
+            if not isinstance(raw_calls, list):
+                raise ValueError()
+            calls = []
+            for c in raw_calls:
+                fn = c["function"]
+                name = fn["name"]
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError()
+                args = fn["arguments"]
+                if not isinstance(args, str):
+                    raise ValueError()
+                args = json.loads(args)
+                if not isinstance(args, dict):
+                    raise ValueError()
+                calls.append({"name": name, "arguments": args})
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError, UnicodeError):
+            raise ProviderError("provider returned malformed response or tool call") from None
+        return ChatResult(self.name, self.model, content or "", calls, data)
+
 
 
 class InklingLocal(_OpenAICompat):
@@ -98,11 +150,18 @@ class OrnithOpenAICompat(_OpenAICompat):
 
 def require_loopback_url(url: str) -> str:
     """Refuse nonlocal and credential-bearing URLs for privileged/local agent routes."""
-    u = urlsplit(url)
-    if (u.scheme != "http" or u.hostname not in ("127.0.0.1", "localhost", "::1")
-            or u.username or u.password or not u.port or u.query or u.fragment):
-        raise ProviderUnavailable("local agent endpoint must be http on loopback with an explicit port")
+    try:
+        u = urlsplit(url)
+        valid = (u.scheme == "http" and u.hostname in ("127.0.0.1", "localhost", "::1")
+                 and u.username is None and u.password is None and u.port is not None
+                 and 0 < u.port <= 65535 and "?" not in url and "#" not in url
+                 and not any(ch.isspace() or ord(ch) < 32 for ch in url))
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ProviderUnavailable("local endpoint must be http on loopback with an explicit port")
     return url.rstrip("/")
+
 
 
 class HermesLocal(_OpenAICompat):
@@ -121,19 +180,9 @@ class HermesLocal(_OpenAICompat):
 
 
 def _openclaw_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
-    """No redirects: never send privileged operator bearer to another origin."""
-    class NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, hdrs, newurl):
-            raise ProviderError(f"OpenClaw endpoint redirected (HTTP {code}); refusing to forward bearer")
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-                                 headers={"Content-Type": "application/json", **headers})
-    try:
-        with urllib.request.build_opener(NoRedirect()).open(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as exc:
-        raise ProviderError(f"OpenClaw HTTP {exc.code}") from exc
-    except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
-        raise ProviderUnavailable(f"cannot reach OpenClaw loopback endpoint: {exc}") from exc
+    """Refuse redirects and keep privileged payloads out of errors."""
+    return http_json(url, body, headers, timeout)
+
 
 
 class OpenClawOwner(_OpenAICompat):
@@ -173,21 +222,17 @@ class InklingHFRouter(_OpenAICompat):
         return bool(self.model and self.api_key)
 
 
-# cactus-needle 3.0.5 (latest on PyPI as of 2026-09-24) pins the Needle 3 engine to 3.0.2 in
-# needle/agent/fetch.py, but Hugging Face Cactus-Compute/needle3/python only publishes 3.0.0 and
-# 3.0.1 wheels, so the first Needle() call 404s. Map known-unpublished pins to the newest published
-# engine. Remove once upstream publishes 3.0.2. INSTINCT_NEEDLE_ENGINE_V3 overrides the choice.
-NEEDLE_UNPUBLISHED_ENGINES = {"3.0.2": "3.0.1"}
-
+# The pinned needle3 revision publishes engine 3.0.2. Do not silently downgrade.
+# An operator may explicitly select another engine via INSTINCT_NEEDLE_ENGINE_V3.
 
 def fix_needle_engine(fetch_module: Any, env: dict | None = None) -> str | None:
-    """Point cactus-needle's Needle 3 engine at a published version. Returns the version in use."""
+    """Apply an explicit engine override; otherwise retain the upstream engine pin."""
     e = os.environ if env is None else env
     versions = getattr(fetch_module, "ENGINE_VERSIONS", None)
     if not isinstance(versions, dict):
         return None
     current = versions.get(3)
-    target = e.get("INSTINCT_NEEDLE_ENGINE_V3") or NEEDLE_UNPUBLISHED_ENGINES.get(current)
+    target = e.get("INSTINCT_NEEDLE_ENGINE_V3")
     if target and target != current:
         versions[3] = target
     return versions.get(3)
@@ -207,7 +252,7 @@ def needle_with_fallback(needle_cls: Callable[..., Any]) -> Callable[..., Any]:
             try:
                 return needle_cls(generation=2, **kwargs)
             except Exception as second:
-                raise ProviderUnavailable(f"Needle 3 failed ({first}); Needle 2 fallback failed ({second})") from second
+                raise ProviderUnavailable("Needle 3 and Needle 2 fallback could not load") from None
     return make
 
 
@@ -221,6 +266,9 @@ class NeedleLocal(Provider):
         self.weights, self.factory, self.min_confidence = weights, factory, min_confidence
         # cactus-needle sends anonymous usage counts to its developers by default. Off unless opted in.
         self.telemetry = telemetry
+
+    def allows_private(self) -> bool:
+        return not self.telemetry
 
     def _factory(self):
         if self.factory:
@@ -264,13 +312,22 @@ class NeedleLocal(Provider):
         agent = self._factory()(**kwargs)
         out = agent.complete(query, max_new_tokens=min(max_tokens, 256))
         if not isinstance(out, dict) or not out.get("success", True):
-            raise ProviderError(f"needle failed: {out.get('error') if isinstance(out, dict) else out!r}")
-        calls = list(out.get("function_calls") or []) if out.get("type") == "call" else []
+            raise ProviderError("Needle inference failed") from None
+        calls = out.get("function_calls", []) if out.get("type") == "call" else []
+        if not isinstance(calls, list) or any(
+            not isinstance(c, dict) or not isinstance(c.get("name"), str)
+            or not c["name"].strip() or not isinstance(c.get("arguments"), dict)
+            for c in calls
+        ):
+            raise ProviderError("Needle returned malformed tool calls") from None
+        validation = out.get("validation") or {}
+        if not isinstance(validation, dict):
+            raise ProviderError("Needle returned malformed validation") from None
         conf = out.get("confidence")
         if calls and not self.weights and isinstance(conf, (int, float)) and conf < self.min_confidence:
             calls = []  # low confidence: let the router escalate
         # validation.ungrounded is written by needle/__init__.py _annotate_ungrounded (cactus-needle 3.0.5).
-        if calls and (out.get("validation") or {}).get("ungrounded"):
+        if calls and validation.get("ungrounded"):
             calls = []  # Needle flagged argument values not found in the query: escalate instead of trusting them
         return ChatResult(self.name, self.weights or "needle-base", "", calls, out)
 

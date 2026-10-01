@@ -53,9 +53,26 @@ class _Links(HTMLParser):
             self._href = None
 
 
+def _catalog_origin(url: str) -> bool:
+    try:
+        u = urllib.parse.urlsplit(url)
+        return (u.scheme == "https" and u.hostname in ("theailibrary.co", "www.theailibrary.co")
+                and u.username is None and u.password is None and u.port in (None, 443)
+                and not any(ch.isspace() or ord(ch) < 32 for ch in url))
+    except ValueError:
+        return False
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+        raise PermissionError("catalog redirect refused")
+
+
 def _get(url: str, timeout: float = 20) -> str:
+    if not _catalog_origin(url):
+        raise PermissionError("catalog origin refused")
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urllib.request.build_opener(_NoRedirect()).open(req, timeout=timeout) as r:
         return r.read(3_000_000).decode("utf-8", "replace")
 
 
@@ -81,6 +98,8 @@ class AILibraryCatalog:
         return self._robots.can_fetch(UA, url)
 
     def _page(self, url: str) -> str:
+        if not _catalog_origin(url):
+            raise PermissionError("catalog origin refused")
         hit = self._cache.get(url)
         if hit and self.clock() - hit[0] < self.ttl_s:
             return hit[1]
@@ -97,18 +116,22 @@ class AILibraryCatalog:
     def browse(self, section: str = "", query: str | None = None, limit: int = 50) -> list[CatalogItem]:
         if section not in self.SECTIONS:
             raise ValueError(f"section must be one of {sorted(self.SECTIONS)}")
+        if limit <= 0:
+            return []
         url = BASE + self.SECTIONS[section]
         p = _Links(); p.feed(self._page(url))
         items, seen = [], set()
         for href, text in p.links:
             if not href or not text or len(text) < 3:
                 continue
-            full = urllib.parse.urljoin(url, href)
-            host = urllib.parse.urlsplit(full).hostname or ""
-            if not host.endswith("theailibrary.co") or full in seen:
+            try:
+                full = urllib.parse.urljoin(url, href)
+            except ValueError:
+                continue
+            if not _catalog_origin(full) or full in seen:
                 continue
             path = urllib.parse.urlsplit(full).path
-            if path in ("/", "/pricing", "/terms-of-service", "/privacy-policy", "/about-us") or path.startswith(("/login", "/signup", "/submit")):
+            if path in ("/", "/pricing", "/terms-of-service", "/privacy-policy", "/about-us") or path.startswith(("/login", "/signup", "/submit", "/account")):
                 continue
             kind = "prompt" if "/prompt" in path else "tool" if re.search(r"/(tool|tools|ai-tools|product)s?/", path) else "link"
             if query and query.casefold() not in text.casefold():

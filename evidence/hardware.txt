@@ -1,0 +1,8 @@
+ENV: Linux-6.1.158+-x86_64-with-glibc2.35
+MemTotal:        2030412 kB
+MemAvailable:    1523700 kB
+SwapTotal:             0 kB
+GPU devices: []
+nvidia-smi: None
+Ornith required download: 5780090816 bytes (5.78 GB), ornith-ai/Ornith-1.5-9B-GGUF Q4_K_M.
+Inkling documented floor: ~89 GB RAM+VRAM (2-bit). No actual Ornith or Inkling inference attempted; no other model substituted.

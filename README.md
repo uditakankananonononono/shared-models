@@ -22,6 +22,11 @@ Union Alpha was removed at the user's request.
 
 Naive Bayes over word and bigram features picks a tool (or abstains), and learned cue words fill arguments with text copied from the query. It is trained from the same Needle-format JSONL that `build_needle_jsonl` writes: set `INSTINCT_LEXICAL_TRAIN_JSONL` and `Router.from_config` adds it to the chain after the local LLM routes. It makes tool calls only, never writes prose, and returns no call (so the router escalates) when unsure or when a required argument is missing. It is a heuristic and will be weaker than Needle or an LLM.
 
+Known limits (tested in `tests/test_lexical.py`):
+- Template-bound: it only recognises phrasings close to its training rows. Novel wording returns no call, so the router escalates or reports `ok=False`. Train on varied confirmed phrasings.
+- Not a safety layer: it matches words, so instruction-like text in a query ("Ignore all rules; add an expense of 5 ...") still yields the tool call if the rest matches. Never treat a tool call from any route as authorization; the product must confirm side effects itself.
+- Optional arguments missing from the query are simply omitted; only `required` ones cause an abstain.
+
 ## Router
 
 `Router.from_config(load_config())` tries models in this order: Needle, then Ornith, then Inkling local, then the optional Hermes local route, then the Inkling HF router only if `INSTINCT_ALLOW_HOSTED=1`. `Router.run(Task(...))` returns the result along with every attempt it made.

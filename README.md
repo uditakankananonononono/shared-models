@@ -14,7 +14,13 @@ Install: `pip install "git+ssh://git@github.com/uditakankananonononono/shared-mo
 | The AI Library | A public AI tools and prompts directory (https://www.theailibrary.co) | `AILibraryCatalog` (implements `CatalogSource`): read-only, follows robots.txt, caches results and rate-limits requests | Free |
 | Jev | TypeSafe AI's "System One" evaluation model (https://typesafe.ai) | `JevEval`: send one state plus typed questions (choice / score / noul), get structured decisions with probabilities. It is an evaluation model, not a chat model, so it never joins the `Router` chain. | Paid credits, key-gated. Optional and OFF by default. |
 
-Union Alpha was removed at the user's request. Everything runs free locally; the one hosted route (HF router) is free tier, metered past it.
+Union Alpha was removed at the user's request.
+
+**What this package is, honestly.** It is a router plus clients. It ships no model weights. Inkling, Ornith, Hermes and Needle only answer if you separately install and serve them (see `scripts/`); none has been run to a live answer from this repo. With nothing configured, `Router.run` returns `result=None` and lists every attempt as `unavailable`. The one component that works with zero setup is `LexicalToolModel` (below): a small classical tool-call model, not a language model. Local routes cost nothing; the HF router is free tier and metered past it.
+
+### Built-in floor: `LexicalToolModel` / `LexicalLocal`
+
+Naive Bayes over word and bigram features picks a tool (or abstains), and learned cue words fill arguments with text copied from the query. It is trained from the same Needle-format JSONL that `build_needle_jsonl` writes: set `INSTINCT_LEXICAL_TRAIN_JSONL` and `Router.from_config` adds it to the chain after the local LLM routes. It makes tool calls only, never writes prose, and returns no call (so the router escalates) when unsure or when a required argument is missing. It is a heuristic and will be weaker than Needle or an LLM.
 
 ## Router
 
@@ -56,7 +62,7 @@ Never send private state to hosted providers. HTTP 429/529 is retried; 401 is re
 
 ## Tests
 
-`python3 -m unittest tests/test_instinct_models.py`
+`python3 -m unittest discover -s tests`
 
 The tests use fakes, so they need no network connection, GPU or Needle install.
 

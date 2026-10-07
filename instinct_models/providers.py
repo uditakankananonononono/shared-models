@@ -86,11 +86,27 @@ class _OpenAICompat(Provider):
         data = self.transport(f"{self.base_url}/chat/completions", body, headers, self.timeout)
         try:
             msg = data["choices"][0]["message"]
-        except (KeyError, IndexError, TypeError) as exc:
+            if not isinstance(msg, dict):
+                raise ValueError("message must be an object")
+            text = msg.get("content")
+            if text is not None and not isinstance(text, str):
+                raise ValueError("content must be text or null")
+            raw_calls = msg.get("tool_calls")
+            if raw_calls is None:
+                raw_calls = []
+            if not isinstance(raw_calls, list):
+                raise ValueError("tool_calls must be an array")
+            calls = []
+            for call in raw_calls:
+                function = call["function"]
+                name = function["name"]
+                arguments = json.loads(function["arguments"])
+                if not isinstance(name, str) or not name or not isinstance(arguments, dict):
+                    raise ValueError("tool call needs a name and object arguments")
+                calls.append({"name": name, "arguments": arguments})
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise ProviderError(f"{self.name}: unexpected response shape") from exc
-        calls = [{"name": c["function"]["name"], "arguments": json.loads(c["function"].get("arguments") or "{}")}
-                 for c in (msg.get("tool_calls") or [])]
-        return ChatResult(self.name, self.model, msg.get("content") or "", calls, data)
+        return ChatResult(self.name, self.model, text or "", calls, data)
 
 
 class InklingLocal(_OpenAICompat):

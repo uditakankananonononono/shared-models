@@ -64,3 +64,24 @@ class ProviderShapeTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+    def test_needle_malformed_decoded_output_escalates(self):
+        from instinct_models import NeedleLocal
+        cases = [
+            {'type': 'call', 'function_calls': 'bad'},
+            {'type': 'call', 'function_calls': [None]},
+            {'type': 'call', 'function_calls': [{'name': 'x', 'arguments': []}]},
+            {'type': 'call', 'function_calls': [{'name': '', 'arguments': {}}]},
+            {'type': 'call', 'function_calls': [{'name': 'x', 'arguments': {}}], 'validation': 'bad'},
+        ]
+        tools = [{'name': 'x', 'parameters': {'type': 'object', 'properties': {}}}]
+        for data in cases:
+            with self.subTest(data=data):
+                class Agent:
+                    def complete(self, *args, **kwargs):
+                        return data
+                bad = NeedleLocal(factory=lambda **kwargs: Agent())
+                good = OrnithOpenAICompat('http://localhost:1234/v1', 'good', transport=lambda *a: {'choices': [{'message': {'content': 'answer'}}]})
+                out = Router([bad, good]).run(Task([{'role': 'user', 'content': 'synthetic'}], tools=tools))
+                self.assertEqual(out.result.text, 'answer')
+                self.assertEqual([a.outcome for a in out.attempts], ['error', 'ok'])

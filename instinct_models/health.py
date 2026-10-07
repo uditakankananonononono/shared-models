@@ -2,7 +2,8 @@
 
 `probe(base_url, model, api_key)` does GET {base_url}/models and reports whether
 the model is listed. On the Hugging Face router the model list is public, so a
-separate whoami call checks that HF_TOKEN is actually valid.
+separate whoami call checks that HF_TOKEN is actually valid. Redirects are
+refused, including same-origin redirects; configure the final endpoint directly.
 """
 from __future__ import annotations
 
@@ -12,11 +13,19 @@ import urllib.request
 import urllib.parse
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never send a health credential beyond the explicitly configured URL."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _get(url: str, api_key: str | None, timeout: float) -> dict:
     h = {"User-Agent": "instinct-models"}
     if api_key:
         h["Authorization"] = f"Bearer {api_key}"
-    with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:
+    opener = urllib.request.build_opener(_NoRedirect())
+    with opener.open(urllib.request.Request(url, headers=h), timeout=timeout) as r:
         return json.loads(r.read().decode())
 
 

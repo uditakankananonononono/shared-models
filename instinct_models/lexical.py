@@ -110,6 +110,8 @@ class LexicalToolModel:
         if not labels:
             return NONE, 0.0
         feats = _feats(query)
+        if not feats:
+            return NONE, 0.0  # nothing to go on: abstain rather than pick a tool by prior alone
         total = sum(self.class_n[l] for l in labels)
         v = max(len(self.vocab), 1)
         logp = {}

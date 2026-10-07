@@ -17,3 +17,9 @@ class RowArgumentShapeTests(unittest.TestCase):
     def test_missing_or_object_arguments_pass(self):
         self.assertIsNone(check_row(row(...)))
         self.assertIsNone(check_row(row({"a": "x"})))
+
+
+class EmptyArgumentTests(unittest.TestCase):
+    def test_blank_argument_value_is_rejected(self):
+        for v in ("", "   "):
+            self.assertIsNotNone(check_row(row({"a": v})), repr(v))

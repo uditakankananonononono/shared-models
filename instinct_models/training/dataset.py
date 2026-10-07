@@ -59,7 +59,9 @@ def check_row(row: ExampleRow) -> str | None:
         if not isinstance(args, dict):
             return f"arguments for {call.get('name')!r} must be an object"
         for v in _values(args):
-            if v.strip() and v.casefold() not in row.query.casefold():
+            if not v.strip():
+                return "blank argument value (omit optional fields without evidence)"
+            if v.casefold() not in row.query.casefold():
                 return f"argument value {v!r} is not present in the query"
     if not row.query.strip():
         return "empty query"

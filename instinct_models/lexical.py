@@ -39,6 +39,14 @@ def _feats(text: str) -> list[str]:
     return w + [f"{a}_{b}" for a, b in zip(w, w[1:])]
 
 
+def _text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(p["text"] for p in content if isinstance(p, dict) and isinstance(p.get("text"), str))
+    return ""
+
+
 class LexicalToolModel:
     def __init__(self, min_confidence: float = 0.6, alpha: float = 0.3):
         self.min_confidence, self.alpha = min_confidence, alpha
@@ -124,7 +132,10 @@ class LexicalToolModel:
                 val = next((e for e in spec["enum"] if str(e).casefold() in query.casefold()), None)
             elif t in ("integer", "number"):
                 m = _NUM.search(query)
-                val = (float(m.group()) if "." in m.group() else int(m.group())) if m else None
+                if m is None or (t == "integer" and "." in m.group()):
+                    val = None
+                else:
+                    val = float(m.group()) if "." in m.group() else int(m.group())
             elif "email" in p.lower() and _EMAIL.search(query):
                 val = _EMAIL.search(query).group()
             elif ("date" in p.lower() or p.lower() in ("due", "deadline")) and _DATE.search(query):
@@ -183,7 +194,7 @@ class LexicalLocal(Provider):
             raise ProviderUnavailable("lexical model is not trained")
         if not tools:
             raise ProviderUnavailable("lexical model only makes tool calls")
-        user = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+        user = _text(next((m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""))
         call = self.model.predict(user, tools)
         calls = [{"name": call["name"], "arguments": call["arguments"]}] if call else []
         return ChatResult(self.name, "lexical-nb", "", calls, {"prediction": call})

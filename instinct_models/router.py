@@ -6,7 +6,7 @@
 - private=True never reaches a hosted route: the chain stops instead.
 - Optional built-in floor: LexicalLocal (naive Bayes tool picker, tool calls only, abstains when unsure).
 - With no model configured the router returns result=None: it is a router/client, not a model.
-- No paid route exists in this package.
+- Hosted HF routing is opt-in and metered past its free tier.
 """
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ class Router:
             except ProviderError as exc:
                 out.attempts.append(RouteAttempt(p.name, "error", str(exc)[:300]))
                 continue
-            if task.tools and not res.tool_calls and isinstance(p, NeedleLocal):
+            if task.tools and not res.tool_calls and isinstance(p, (NeedleLocal, LexicalLocal)):
                 out.attempts.append(RouteAttempt(p.name, "escalated", "no tool call"))
                 continue
             out.attempts.append(RouteAttempt(p.name, "ok"))

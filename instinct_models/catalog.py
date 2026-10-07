@@ -53,9 +53,16 @@ class _Links(HTMLParser):
             self._href = None
 
 
+class _NoCatalogRedirect(urllib.request.HTTPRedirectHandler):
+    """Do not leave the URL whose robots permission the caller checked."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _get(url: str, timeout: float = 20) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urllib.request.build_opener(_NoCatalogRedirect()).open(req, timeout=timeout) as r:
         return r.read(3_000_000).decode("utf-8", "replace")
 
 

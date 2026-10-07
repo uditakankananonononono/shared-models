@@ -296,8 +296,9 @@ class NeedleLocal(Provider):
         threshold applies to the base model only."""
         if not tools:
             raise ProviderUnavailable("Needle only handles tool-calling turns")
-        query = message_text(next((m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""))
-        system = message_text(next((m.get("content") for m in messages if m.get("role") == "system"), None)) or None
+        msgs = [m for m in messages if isinstance(m, dict)]
+        query = message_text(next((m.get("content") for m in reversed(msgs) if m.get("role") == "user"), ""))
+        system = message_text(next((m.get("content") for m in msgs if m.get("role") == "system"), None)) or None
         kwargs: dict[str, Any] = {"tools": tools}
         if self.weights:
             kwargs["weights"] = self.weights

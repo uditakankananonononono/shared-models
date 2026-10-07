@@ -198,7 +198,7 @@ class LexicalLocal(Provider):
             raise ProviderUnavailable("lexical model is not trained")
         if not tools:
             raise ProviderUnavailable("lexical model only makes tool calls")
-        user = _text(next((m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""))
+        user = _text(next((m.get("content") for m in reversed(messages) if isinstance(m, dict) and m.get("role") == "user"), ""))
         call = self.model.predict(user, tools)
         calls = [{"name": call["name"], "arguments": call["arguments"]}] if call else []
         return ChatResult(self.name, "lexical-nb", "", calls, {"prediction": call})

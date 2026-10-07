@@ -44,3 +44,18 @@ class CatalogRedirectTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+
+class CatalogDomainTests(unittest.TestCase):
+    def test_suffix_lookalikes_never_get_catalog_source_label(self):
+        from instinct_models.catalog import AILibraryCatalog
+        html = '''<a href="https://eviltheailibrary.co/tools/a">Evil suffix</a>
+        <a href="https://theailibrary.co.attacker.invalid/tools/b">Evil extension</a>
+        <a href="https://theailibrary.co/tools/c">Apex tool</a>
+        <a href="https://www.theailibrary.co/tools/d">Main tool</a>
+        <a href="https://sub.theailibrary.co/tools/e">Subdomain tool</a>'''
+        catalog = AILibraryCatalog(fetch=lambda u: 'User-agent: *\nAllow: /\n'
+                                   if u.endswith('/robots.txt') else html, min_interval_s=0)
+        items = catalog.browse()
+        self.assertEqual([i.title for i in items], ['Apex tool', 'Main tool', 'Subdomain tool'])
+        self.assertTrue(all(i.source == 'theailibrary.co' for i in items))

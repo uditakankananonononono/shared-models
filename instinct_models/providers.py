@@ -57,6 +57,15 @@ def http_json(url: str, body: dict, headers: dict, timeout: float) -> dict:
         raise ProviderUnavailable(f"cannot reach {url}: {exc}") from exc
 
 
+def message_text(content) -> str:
+    """Plain text of a chat message's content (string, content-parts list, or null)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(p["text"] for p in content if isinstance(p, dict) and isinstance(p.get("text"), str))
+    return ""
+
+
 class Provider(ABC):
     name = "provider"
     locality = LOCAL
@@ -287,8 +296,8 @@ class NeedleLocal(Provider):
         threshold applies to the base model only."""
         if not tools:
             raise ProviderUnavailable("Needle only handles tool-calling turns")
-        query = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
-        system = next((m["content"] for m in messages if m.get("role") == "system"), None)
+        query = message_text(next((m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""))
+        system = message_text(next((m.get("content") for m in messages if m.get("role") == "system"), None)) or None
         kwargs: dict[str, Any] = {"tools": tools}
         if self.weights:
             kwargs["weights"] = self.weights

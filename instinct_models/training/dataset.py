@@ -70,6 +70,7 @@ def check_row(row: ExampleRow) -> str | None:
 
 def build_needle_jsonl(dataset: DomainDataset, out_path: str | Path, *, min_off_topic_ratio: float = 0.1) -> dict:
     kept, dropped, off_topic, private = [], [], 0, False
+    seen: set[str] = set()
     for row in dataset.rows():
         if not row.confirmed:
             dropped.append({"source_ref": row.source_ref, "reason": "not owner-confirmed"})
@@ -87,6 +88,11 @@ def build_needle_jsonl(dataset: DomainDataset, out_path: str | Path, *, min_off_
             rec["reasoning"] = row.reasoning
         if row.system:
             rec["system"] = row.system
+        key = json.dumps(rec, sort_keys=True, ensure_ascii=False)
+        if key in seen:
+            dropped.append({"source_ref": row.source_ref, "reason": "duplicate of an earlier row"})
+            continue
+        seen.add(key)
         kept.append(rec)
         off_topic += not row.answers
         private = private or row.private

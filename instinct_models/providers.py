@@ -292,12 +292,26 @@ class NeedleLocal(Provider):
         out = agent.complete(query, max_new_tokens=min(max_tokens, 256))
         if not isinstance(out, dict) or not out.get("success", True):
             raise ProviderError(f"needle failed: {out.get('error') if isinstance(out, dict) else out!r}")
-        calls = list(out.get("function_calls") or []) if out.get("type") == "call" else []
+        raw_calls = out.get("function_calls") if out.get("type") == "call" else []
+        if raw_calls is None:
+            raw_calls = []
+        if not isinstance(raw_calls, list):
+            raise ProviderError("needle: function_calls must be an array")
+        for call in raw_calls:
+            if (not isinstance(call, dict) or not isinstance(call.get("name"), str)
+                    or not call["name"] or not isinstance(call.get("arguments"), dict)):
+                raise ProviderError("needle: malformed function call")
+        validation = out.get("validation")
+        if validation is None:
+            validation = {}
+        if not isinstance(validation, dict):
+            raise ProviderError("needle: validation must be an object")
+        calls = list(raw_calls)
         conf = out.get("confidence")
         if calls and not self.weights and isinstance(conf, (int, float)) and conf < self.min_confidence:
             calls = []  # low confidence: let the router escalate
         # validation.ungrounded is written by needle/__init__.py _annotate_ungrounded (cactus-needle 3.0.5).
-        if calls and (out.get("validation") or {}).get("ungrounded"):
+        if calls and validation.get("ungrounded"):
             calls = []  # Needle flagged argument values not found in the query: escalate instead of trusting them
         return ChatResult(self.name, self.weights or "needle-base", "", calls, out)
 

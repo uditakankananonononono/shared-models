@@ -66,7 +66,7 @@ def load_config(env: dict | None = None, path: str | None = None) -> ProductConf
                         hf_model=g("HF_MODEL", "thinkingmachines/Inkling-Small"), ornith_url=g("ORNITH_URL"),
                         ornith_model=g("ORNITH_MODEL"), needle_weights=g("NEEDLE_WEIGHTS"), hermes_url=g("HERMES_URL"), lexical_train_jsonl=g("LEXICAL_TRAIN_JSONL"),
                         hermes_model=g("HERMES_MODEL"),
-                        allow_hosted=g("ALLOW_HOSTED", "0") not in ("0", "false", "no"),
+                        allow_hosted=g("ALLOW_HOSTED", "0").strip().lower() in ("1", "true", "yes", "on"),
                         jev_api_key=g("JEV_API_KEY") or e.get("JEV_API_KEY") or None)
     if path:
         data = _load_file(path)

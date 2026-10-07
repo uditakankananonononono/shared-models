@@ -23,3 +23,22 @@ class EmptyArgumentTests(unittest.TestCase):
     def test_blank_argument_value_is_rejected(self):
         for v in ("", "   "):
             self.assertIsNotNone(check_row(row({"a": v})), repr(v))
+
+
+class DuplicateRowTests(unittest.TestCase):
+    def test_identical_rows_are_deduplicated_with_reason(self):
+        import tempfile
+        from instinct_models.training.dataset import build_needle_jsonl
+
+        class D:
+            product = "atlas"
+
+            def rows(self):
+                for i in range(3):
+                    yield ExampleRow("do x", T, [{"name": "t", "arguments": {"a": "x"}}], True, f"r{i}", private=False)
+                yield ExampleRow("hello", T, [], True, "o", private=False)
+
+        m = build_needle_jsonl(D(), tempfile.mkdtemp() + "/o.jsonl")
+        self.assertEqual(m["rows"], 2)
+        self.assertEqual(m["dropped"], 2)
+        self.assertTrue(all("duplicate" in d["reason"] for d in m["dropped_detail"]))

@@ -49,6 +49,8 @@ def http_json(url: str, body: dict, headers: dict, timeout: float) -> dict:
     try:
         with urllib.request.build_opener(_NoTransportRedirect()).open(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
+    except (ValueError, RecursionError) as exc:
+        raise ProviderError("provider returned invalid JSON") from exc
     except urllib.error.HTTPError as exc:
         raise ProviderError(f"HTTP {exc.code} from {url}: {exc.read()[:300]!r}") from exc
     except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
@@ -104,7 +106,7 @@ class _OpenAICompat(Provider):
                 if not isinstance(name, str) or not name or not isinstance(arguments, dict):
                     raise ValueError("tool call needs a name and object arguments")
                 calls.append({"name": name, "arguments": arguments})
-        except (KeyError, IndexError, TypeError, ValueError) as exc:
+        except (KeyError, IndexError, TypeError, ValueError, RecursionError) as exc:
             raise ProviderError(f"{self.name}: unexpected response shape") from exc
         return ChatResult(self.name, self.model, text or "", calls, data)
 
@@ -153,6 +155,8 @@ def _openclaw_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
     try:
         with urllib.request.build_opener(NoRedirect()).open(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
+    except (ValueError, RecursionError) as exc:
+        raise ProviderError("provider returned invalid JSON") from exc
     except urllib.error.HTTPError as exc:
         raise ProviderError(f"OpenClaw HTTP {exc.code}") from exc
     except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
@@ -320,6 +324,8 @@ def _jev_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
     try:
         with urllib.request.build_opener(_NoTransportRedirect()).open(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
+    except (ValueError, RecursionError) as exc:
+        raise ProviderError("provider returned invalid JSON") from exc
     except urllib.error.HTTPError as exc:
         raise JevStatusError(exc.code, exc.read()[:300].decode("utf-8", "replace")) from exc
     except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:

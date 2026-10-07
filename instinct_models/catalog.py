@@ -111,10 +111,13 @@ class AILibraryCatalog:
             if not href or not text or len(text) < 3:
                 continue
             full = urllib.parse.urljoin(url, href)
-            host = urllib.parse.urlsplit(full).hostname or ""
+            parsed = urllib.parse.urlsplit(full)
+            if parsed.scheme not in ("http", "https"):
+                continue
+            host = parsed.hostname or ""
             if not (host == "theailibrary.co" or host.endswith(".theailibrary.co")) or full in seen:
                 continue
-            path = urllib.parse.urlsplit(full).path
+            path = parsed.path
             if path in ("/", "/pricing", "/terms-of-service", "/privacy-policy", "/about-us") or path.startswith(("/login", "/signup", "/submit")):
                 continue
             kind = "prompt" if "/prompt" in path else "tool" if re.search(r"/(tool|tools|ai-tools|product)s?/", path) else "link"

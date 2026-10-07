@@ -59,3 +59,14 @@ class CatalogDomainTests(unittest.TestCase):
         items = catalog.browse()
         self.assertEqual([i.title for i in items], ['Apex tool', 'Main tool', 'Subdomain tool'])
         self.assertTrue(all(i.source == 'theailibrary.co' for i in items))
+
+    def test_only_web_scheme_links_receive_catalog_label(self):
+        from instinct_models.catalog import AILibraryCatalog
+        html = '''<a href="javascript://theailibrary.co/tools/a">Script link</a>
+        <a href="ftp://theailibrary.co/tools/b">FTP link</a>
+        <a href="file://theailibrary.co/tools/c">File link</a>
+        <a href="http://theailibrary.co/tools/d">HTTP tool</a>
+        <a href="https://www.theailibrary.co/tools/e">HTTPS tool</a>'''
+        catalog = AILibraryCatalog(fetch=lambda u: 'User-agent: *\nAllow: /\n'
+                                   if u.endswith('/robots.txt') else html, min_interval_s=0)
+        self.assertEqual([i.title for i in catalog.browse()], ['HTTP tool', 'HTTPS tool'])

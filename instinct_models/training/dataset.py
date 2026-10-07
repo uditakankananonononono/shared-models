@@ -53,7 +53,12 @@ def check_row(row: ExampleRow) -> str | None:
     for call in row.answers:
         if call.get("name") not in names:
             return f"answer calls unknown tool {call.get('name')!r}"
-        for v in _values(call.get("arguments", {})):
+        args = call.get("arguments", {})
+        if args is None:
+            args = {}
+        if not isinstance(args, dict):
+            return f"arguments for {call.get('name')!r} must be an object"
+        for v in _values(args):
             if v.strip() and v.casefold() not in row.query.casefold():
                 return f"argument value {v!r} is not present in the query"
     if not row.query.strip():

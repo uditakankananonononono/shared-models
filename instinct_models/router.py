@@ -77,6 +77,9 @@ class Router:
             except ProviderError as exc:
                 out.attempts.append(RouteAttempt(p.name, "error", str(exc)[:300]))
                 continue
+            except Exception as exc:  # noqa: BLE001 - one broken provider must not stop the chain
+                out.attempts.append(RouteAttempt(p.name, "error", f"{type(exc).__name__}: {exc}"[:300]))
+                continue
             if task.tools and not res.tool_calls and isinstance(p, (NeedleLocal, LexicalLocal)):
                 out.attempts.append(RouteAttempt(p.name, "escalated", "no tool call"))
                 continue

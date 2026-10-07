@@ -104,6 +104,8 @@ class AILibraryCatalog:
     def browse(self, section: str = "", query: str | None = None, limit: int = 50) -> list[CatalogItem]:
         if section not in self.SECTIONS:
             raise ValueError(f"section must be one of {sorted(self.SECTIONS)}")
+        if limit <= 0:
+            return []
         url = BASE + self.SECTIONS[section]
         p = _Links(); p.feed(self._page(url))
         items, seen = [], set()

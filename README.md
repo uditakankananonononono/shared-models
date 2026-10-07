@@ -29,7 +29,7 @@ Known limits (tested in `tests/test_lexical.py`):
 
 ## Router
 
-`Router.from_config(load_config())` tries models in this order: Needle, then Ornith, then Inkling local, then the optional Hermes local route, then the Inkling HF router only if `INSTINCT_ALLOW_HOSTED=1`. `Router.run(Task(...))` returns the result along with every attempt it made.
+`Router.from_config(load_config())` tries models in this order: Needle, then Ornith, then Inkling local, then the optional Hermes local route, then the optional built-in lexical floor (only if `INSTINCT_LEXICAL_TRAIN_JSONL` is set), then the Inkling HF router only if `INSTINCT_ALLOW_HOSTED=1`. `Router.run(Task(...))` returns the result along with every attempt it made.
 
 ## Training (per product)
 
@@ -45,7 +45,7 @@ Known limits (tested in `tests/test_lexical.py`):
 
 ## Config
 
-Set these environment variables: `INSTINCT_PRODUCT` (atlas | meemee | sugarcode), `INSTINCT_INKLING_LOCAL_URL`, `INSTINCT_INKLING_LOCAL_MODEL`, `INSTINCT_HF_MODEL`, `INSTINCT_ORNITH_URL`, `INSTINCT_ORNITH_MODEL` (use the tag you pulled), `INSTINCT_NEEDLE_WEIGHTS`, `INSTINCT_ALLOW_HOSTED` (off by default), `INSTINCT_JEV_API_KEY` (optional; falls back to `JEV_API_KEY`). `HF_TOKEN` and the Jev key are read from the environment and never stored. You can also pass a JSON or YAML file through `load_config(path=...)`.
+Set these environment variables: `INSTINCT_PRODUCT` (atlas | meemee | sugarcode), `INSTINCT_INKLING_LOCAL_URL`, `INSTINCT_INKLING_LOCAL_MODEL`, `INSTINCT_HF_MODEL`, `INSTINCT_ORNITH_URL`, `INSTINCT_ORNITH_MODEL` (use the tag you pulled), `INSTINCT_NEEDLE_WEIGHTS`, `INSTINCT_HERMES_URL`, `INSTINCT_HERMES_MODEL`, `INSTINCT_LEXICAL_TRAIN_JSONL`, `INSTINCT_ALLOW_HOSTED` (off by default; only `1`, `true`, `yes` or `on` enable it), `INSTINCT_JEV_API_KEY` (optional; falls back to `JEV_API_KEY`). `HF_TOKEN` and the Jev key are read from the environment and never stored. You can also pass a JSON or YAML file through `load_config(path=...)`.
 
 ## Jev (opt-in, paid; no free API route)
 

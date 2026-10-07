@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+import urllib.parse
 
 
 def _get(url: str, api_key: str | None, timeout: float) -> dict:
@@ -23,7 +24,8 @@ def hf_token_valid(token: str | None, timeout: float = 15) -> bool | str:
     if not token:
         return False
     try:
-        return bool(_get("https://huggingface.co/api/whoami-v2", token, timeout).get("name"))
+        data = _get("https://huggingface.co/api/whoami-v2", token, timeout)
+        return isinstance(data, dict) and isinstance(data.get("name"), str) and bool(data["name"])
     except urllib.error.HTTPError as e:
         return False if e.code in (401, 403) else f"HTTP {e.code}"
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
@@ -38,10 +40,14 @@ def probe(base_url: str, model: str | None, api_key: str | None = None, timeout:
         return {"base_url": base_url, "ok": False, "error": f"HTTP {e.code}"}
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
         return {"base_url": base_url, "ok": False, "error": str(getattr(e, "reason", e))}
-    ids = [m.get("id", "") for m in data.get("data", [])]
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        return {"base_url": base_url, "ok": False, "error": "invalid model-list response"}
+    if any(not isinstance(m, dict) or not isinstance(m.get("id"), str) for m in data["data"]):
+        return {"base_url": base_url, "ok": False, "error": "invalid model-list entry"}
+    ids = [m["id"] for m in data["data"]]
     out = {"base_url": base_url, "ok": True, "model": model, "model_listed": model in ids,
            "models_available": len(ids)}
-    if "huggingface.co" in base_url:
+    if urllib.parse.urlsplit(base_url).hostname == "router.huggingface.co":
         out["token_valid"] = hf_token_valid(api_key, timeout)
         out["ok"] = out["token_valid"] is True
     return out

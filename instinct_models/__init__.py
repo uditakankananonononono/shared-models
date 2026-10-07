@@ -3,7 +3,9 @@
 Components: Inkling (local GGUF / self-hosted, or Hugging Face router), Ornith
 (local GGUF through llama.cpp/Ollama's OpenAI-compatible API), Needle (on-device
 tool-calling model, LoRA fine-tuned per product) and The AI Library
-(read-only catalog connector). Free-first: nothing here calls a paid API.
+(read-only catalog connector). Free-first: the default routes are free or local. The optional Jev
+evaluation client is paid and key-gated, and is off by default; the HF router
+is metered past its free tier and is opt-in.
 Training pipelines are shared; datasets stay per product.
 """
 from .config import ProductConfig, load_config

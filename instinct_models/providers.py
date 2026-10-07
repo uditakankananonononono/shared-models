@@ -135,7 +135,13 @@ class HermesLocal(_OpenAICompat):
     name, locality = "hermes-local", LOCAL
 
     def available(self) -> bool:
-        return super().available() and bool(self.base_url and self._local_url())
+        if not super().available():
+            return False
+        try:
+            self._local_url()
+        except ProviderUnavailable:
+            return False
+        return True
 
     def _local_url(self) -> str:
         return require_loopback_url(self.base_url)

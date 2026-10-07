@@ -137,3 +137,9 @@ implicit product-to-agent fallback would be unsafe and would violate free-only.
 The model route above does not claim to install or run Hermes Agent. Sources:
 https://hermes-agent.nousresearch.com/docs/guides/local-ollama-setup and
 https://hermes-agent.nousresearch.com/docs/reference/cli-commands .
+
+## Network safety behaviors
+
+- HTTP redirects are refused on every transport (health checks, POST calls, Jev, catalog fetches). A redirect is treated as a failure, not followed.
+- Malformed provider output (wrong response shape, invalid or deeply nested JSON, bad Needle function calls or validation envelopes) is raised as `ProviderError`, so the router escalates to the next provider instead of returning bad data.
+- The catalog connector accepts only http/https URLs, and a host must match the allowed domain exactly or be a dot-delimited subdomain of it.

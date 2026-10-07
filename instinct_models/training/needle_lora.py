@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -41,6 +42,8 @@ def _sha(p: Path) -> str:
 
 
 def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "needle") -> dict:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", job.product or ""):
+        raise ValueError(f"invalid product name {job.product!r}")
     data = Path(job.dataset_jsonl)
     if not data.is_file():
         raise FileNotFoundError(job.dataset_jsonl)
@@ -52,6 +55,8 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
         raise RuntimeError("needle CLI not found; pip install cactus-needle")
     out = Path(job.out_dir); out.mkdir(parents=True, exist_ok=True)
     adapter, tuned = out / f"{job.product}-adapter.pkl", out / f"{job.product}-tuned.cact"
+    for stale in (adapter, tuned):  # a leftover file must not pass for this run's output
+        stale.unlink(missing_ok=True)
     env = {k: v for k, v in os.environ.items() if k not in ("NEEDLE_HF_REPO", "OPENROUTER_API_KEY")}
     steps = [[cli, "finetune", str(data), "--epochs", str(job.epochs), "--val-split", str(job.val_split), "--out", str(adapter)],
              [cli, "build", job.base_checkpoint, "--lora", str(adapter), "--out", str(tuned)]]

@@ -126,6 +126,8 @@ class LexicalToolModel:
         out: dict = {}
         quoted = [a or b for a, b in _QUOTED.findall(query)]
         for p, spec in props.items():
+            if not isinstance(spec, dict):
+                spec = {}
             t = spec.get("type", "string")
             val = None
             if spec.get("enum"):
@@ -168,7 +170,9 @@ class LexicalToolModel:
 
     def predict(self, query: str, tools: list[dict]) -> dict | None:
         """Return {name, arguments, confidence} or None (abstain => escalate)."""
-        by = {t["name"]: t for t in tools}
+        by = {t["name"]: t for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str) and t["name"]}
+        if not by:
+            return None
         name, conf = self.classify(query, list(by))
         if name == NONE or conf < self.min_confidence:
             return None

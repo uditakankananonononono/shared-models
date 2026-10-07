@@ -36,11 +36,18 @@ class ChatResult:
 Transport = Callable[[str, dict, dict, float], dict]
 
 
+class _NoTransportRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects so credentials and private request data stay at the chosen endpoint."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def http_json(url: str, body: dict, headers: dict, timeout: float) -> dict:
     req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                  headers={"Content-Type": "application/json", **headers})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.build_opener(_NoTransportRedirect()).open(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         raise ProviderError(f"HTTP {exc.code} from {url}: {exc.read()[:300]!r}") from exc
@@ -295,7 +302,7 @@ def _jev_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
     req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
                                  headers={"Content-Type": "application/json", **headers})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.build_opener(_NoTransportRedirect()).open(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         raise JevStatusError(exc.code, exc.read()[:300].decode("utf-8", "replace")) from exc

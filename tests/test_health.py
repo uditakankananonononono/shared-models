@@ -69,6 +69,7 @@ class RedirectSecurityTests(unittest.TestCase):
         try:
             for code in (301, 302, 303, 307, 308):
                 with self.subTest(code=code):
+                    seen.clear()
                     out = probe(f'http://127.0.0.1:{source.server_port}/{code}', 'm',
                                 'test-only-token', timeout=2)
                     self.assertEqual(seen, [], 'redirect contacted credential sink')

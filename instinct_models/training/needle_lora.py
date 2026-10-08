@@ -78,7 +78,7 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
               "tuned_weights": str(tuned), "tuned_sha256": _sha(tuned), "epochs": job.epochs,
               "trained_at": datetime.now(timezone.utc).isoformat(), "logs": logs}
     if reg.is_symlink():raise ValueError("training registry symlink refused")
-    fd = os.open(reg, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    fd = os.open(reg, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0), 0o600)
     with os.fdopen(fd, "a") as f:
         if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
             raise ValueError("training registry must be regular")

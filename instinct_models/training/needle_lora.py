@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -54,6 +55,9 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
     if runner is _run and shutil.which(cli) is None:
         raise RuntimeError("needle CLI not found; pip install cactus-needle")
     out = Path(job.out_dir); out.mkdir(parents=True, exist_ok=True)
+    reg = out / "registry.jsonl"
+    if reg.is_symlink() or (reg.exists() and not reg.is_file()):
+        raise ValueError("training registry must be a regular non-symlink file")
     adapter, tuned = out / f"{job.product}-adapter.pkl", out / f"{job.product}-tuned.cact"
     for stale in (adapter, tuned):  # a leftover file must not pass for this run's output
         stale.unlink(missing_ok=True)
@@ -73,7 +77,10 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
               "train_locally_only": ds_manifest.get("train_locally_only", True), "adapter": str(adapter),
               "tuned_weights": str(tuned), "tuned_sha256": _sha(tuned), "epochs": job.epochs,
               "trained_at": datetime.now(timezone.utc).isoformat(), "logs": logs}
-    reg = out / "registry.jsonl"
-    with reg.open("a") as f:
+    if reg.is_symlink():raise ValueError("training registry symlink refused")
+    fd = os.open(reg, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "a") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            raise ValueError("training registry must be regular")
         f.write(json.dumps(record) + "\n")
     return record

@@ -49,6 +49,10 @@ def _values(obj) -> list[str]:
 
 
 def check_row(row: ExampleRow) -> str | None:
+    if not isinstance(row.tools, list) or not all(isinstance(t, dict) for t in row.tools):
+        return "tools must be a list of objects"
+    if not isinstance(row.answers, list) or not all(isinstance(c, dict) for c in row.answers):
+        return "answers must be a list of objects"
     names = {t.get("name") for t in row.tools}
     for call in row.answers:
         if call.get("name") not in names:

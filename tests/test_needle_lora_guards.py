@@ -30,3 +30,33 @@ class LoRAGuardTests(unittest.TestCase):
             (out / "atlas-tuned.cact").write_bytes(b"stale")
             with self.assertRaises(RuntimeError):
                 train_needle_lora(job, runner=ok)
+
+
+class ManifestClaimTests(unittest.TestCase):
+    def test_refuses_when_dataset_changed_after_manifest(self):
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            job = LoRAGuardTests()._job(d)
+            Path(job.dataset_jsonl + ".manifest.json").write_text(json.dumps({"sha256": "0" * 64, "rows": 1}))
+            with self.assertRaises(ValueError):
+                train_needle_lora(job, runner=ok)
+
+    def test_never_passes_upload_or_hf_repo(self):
+        import os
+        seen = []
+
+        def runner(cmd, env):
+            seen.append((cmd, env))
+            out = Path(cmd[-1])
+            out.write_bytes(b"x")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        os.environ["NEEDLE_HF_REPO"] = "someone/repo"
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                train_needle_lora(LoRAGuardTests()._job(d), runner=runner)
+        finally:
+            del os.environ["NEEDLE_HF_REPO"]
+        for cmd, env in seen:
+            self.assertNotIn("--upload", cmd)
+            self.assertNotIn("NEEDLE_HF_REPO", env)

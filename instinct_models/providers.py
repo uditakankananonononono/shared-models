@@ -132,9 +132,13 @@ class OrnithOpenAICompat(_OpenAICompat):
 
 def require_loopback_url(url: str) -> str:
     """Refuse nonlocal and credential-bearing URLs for privileged/local agent routes."""
-    u = urlsplit(url)
+    try:
+        u = urlsplit(url)
+        port = u.port
+    except ValueError as exc:
+        raise ProviderUnavailable("local agent endpoint is not a valid URL") from exc
     if (u.scheme != "http" or u.hostname not in ("127.0.0.1", "localhost", "::1")
-            or u.username or u.password or not u.port or u.query or u.fragment):
+            or u.username or u.password or not port or u.query or u.fragment):
         raise ProviderUnavailable("local agent endpoint must be http on loopback with an explicit port")
     return url.rstrip("/")
 
@@ -188,7 +192,7 @@ class OpenClawOwner(_OpenAICompat):
     name, locality = "openclaw-owner", LOCAL
 
     def __init__(self, base_url: str, token: str, model: str = "openclaw/default", **kwargs):
-        if not token:
+        if not isinstance(token, str) or not token.strip():
             raise ProviderUnavailable("OpenClaw owner token required")
         if model != "openclaw/default":
             raise ProviderUnavailable("only the default OpenClaw agent is supported")
@@ -444,7 +448,7 @@ class JevEval(Provider):
                 if exc.status == 401:
                     raise ProviderError("jev: API key missing or invalid (401); check " + ("AI_GATEWAY_API_KEY" if gateway else "JEV_API_KEY")) from exc
                 raise
-        if not isinstance(data, dict) or "answers" not in data:
-            raise ProviderError("jev: unexpected response shape (no 'answers' field)")
+        if not isinstance(data, dict) or not isinstance(data.get("answers"), dict):
+            raise ProviderError("jev: unexpected response shape (no 'answers' object)")
         return {"model": data.get("model", selected_model), "answers": data["answers"],
                 "usage": data.get("usage") or {}, "raw": data}

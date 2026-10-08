@@ -47,6 +47,19 @@ class ProductConfig:
             raise ValueError(f"product must be one of {PRODUCTS}, got {self.product!r}")
 
 
+_TRUE, _FALSE = ("1", "true", "yes", "on"), ("0", "false", "no", "off", "")
+
+
+def _as_bool(v) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, int) and v in (0, 1):
+        return bool(v)
+    if isinstance(v, str) and v.strip().lower() in _TRUE + _FALSE:
+        return v.strip().lower() in _TRUE
+    raise ValueError(f"allow_hosted must be true or false, got {v!r}")
+
+
 def _load_file(path: str) -> dict:
     text = Path(path).read_text()
     if path.endswith((".yaml", ".yml")):
@@ -55,7 +68,11 @@ def _load_file(path: str) -> dict:
         except ImportError as exc:
             raise ValueError("YAML config needs PyYAML; use JSON instead") from exc
         return yaml.safe_load(text) or {}
-    return json.loads(text)
+    try:
+        data = json.loads(text)
+    except (ValueError, RecursionError) as exc:
+        raise ValueError(f"{path}: not valid JSON") from exc
+    return data
 
 
 def load_config(env: dict | None = None, path: str | None = None) -> ProductConfig:
@@ -70,6 +87,12 @@ def load_config(env: dict | None = None, path: str | None = None) -> ProductConf
                         jev_api_key=g("JEV_API_KEY") or e.get("JEV_API_KEY") or None)
     if path:
         data = _load_file(path)
+        if not isinstance(data, dict):
+            raise ValueError(f"{path}: config file must contain an object")
+        if "product" in data and data["product"] != cfg.product:
+            raise ValueError("config file cannot change the product set by INSTINCT_PRODUCT")
+        if "allow_hosted" in data:
+            data = {**data, "allow_hosted": _as_bool(data["allow_hosted"])}
         known = {k: v for k, v in data.items() if k in ProductConfig.__dataclass_fields__ and k != "extra"}
         cfg = replace(cfg, **known, extra={k: v for k, v in data.items() if k not in known})
     return cfg

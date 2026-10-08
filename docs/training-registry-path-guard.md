@@ -11,3 +11,7 @@ Not output-directory containment: operator selects out_dir; hostile parent
 replacement races remain. Windows lacks O_NOFOLLOW, no race-safe claim there.
 Training effects can precede a late append error; no retry/rollback added.
 Concurrent registry serialization/durability are not solved.
+
+Append also uses O_NONBLOCK where available: a late-substituted FIFO refuses
+rather than waiting for a reader. Real POSIX FIFO runner substitution test uses
+a two-second subprocess deadline. This is leaf-only, not parent-race containment.

@@ -79,7 +79,17 @@ class LexicalToolModel:
 
     @classmethod
     def from_jsonl(cls, path: str | Path, **kw) -> "LexicalToolModel":
-        rows = [json.loads(l) for l in Path(path).read_text().splitlines() if l.strip()]
+        rows = []
+        for n, line in enumerate(Path(path).read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except (ValueError, RecursionError) as exc:
+                raise ValueError(f"{path}: line {n} is not valid JSON") from exc
+            if not isinstance(row, dict) or not isinstance(row.get("query"), str):
+                raise ValueError(f"{path}: line {n} must be an object with a string 'query'")
+            rows.append(row)
         return cls(**kw).fit(rows)
 
     def _add(self, label, feats, weight=1.0):
@@ -112,6 +122,8 @@ class LexicalToolModel:
         feats = _feats(query)
         if not feats:
             return NONE, 0.0  # nothing to go on: abstain rather than pick a tool by prior alone
+        if not any(f in self.vocab for f in feats):
+            return NONE, 0.0  # no word was ever seen in training: the prior alone must not trigger a call
         total = sum(self.class_n[l] for l in labels)
         v = max(len(self.vocab), 1)
         logp = {}

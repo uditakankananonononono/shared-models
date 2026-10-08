@@ -50,6 +50,10 @@ class ProductConfig:
 _TRUE, _FALSE = ("1", "true", "yes", "on"), ("0", "false", "no", "off", "")
 
 
+_STR_FIELDS = {"inkling_local_url", "inkling_local_model", "hf_model", "ornith_url", "ornith_model", "needle_weights",
+               "lexical_train_jsonl", "hermes_url", "hermes_model", "jev_api_key"}
+
+
 def _as_bool(v) -> bool:
     if isinstance(v, bool):
         return v
@@ -91,6 +95,9 @@ def load_config(env: dict | None = None, path: str | None = None) -> ProductConf
             raise ValueError(f"{path}: config file must contain an object")
         if "product" in data and data["product"] != cfg.product:
             raise ValueError("config file cannot change the product set by INSTINCT_PRODUCT")
+        for k, v in data.items():
+            if k in _STR_FIELDS and v is not None and not isinstance(v, str):
+                raise ValueError(f"{k} must be a string or null, got {type(v).__name__}")
         if "allow_hosted" in data:
             data = {**data, "allow_hosted": _as_bool(data["allow_hosted"])}
         known = {k: v for k, v in data.items() if k in ProductConfig.__dataclass_fields__ and k != "extra"}

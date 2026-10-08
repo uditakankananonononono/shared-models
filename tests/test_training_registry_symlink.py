@@ -18,3 +18,22 @@ def test_regular_registry_append_still_works(tmp_path):
   __import__('pathlib').Path(cmd[-1]).write_bytes(b'fixture');return subprocess.CompletedProcess(cmd,0,'','')
  result=train_needle_lora(NeedleLoRAJob('atlas',str(data),str(out)),runner=runner)
  assert result['tuned_sha256'] and (out/'registry.jsonl').is_file()
+
+def test_late_registry_fifo_refuses_without_hanging(tmp_path):
+ import os,sys
+ if not hasattr(os,'mkfifo'):pytest.skip('POSIX FIFO only')
+ script=r'''
+import os,subprocess
+from pathlib import Path
+from instinct_models.training.needle_lora import NeedleLoRAJob,train_needle_lora
+root=Path(__import__('sys').argv[1]);data=root/'data';data.write_text('{}\n');out=root/'out'
+def runner(cmd,env):
+ Path(cmd[-1]).write_bytes(b'fixture')
+ if cmd[1]=='build':os.mkfifo(out/'registry.jsonl')
+ return subprocess.CompletedProcess(cmd,0,'','')
+try:train_needle_lora(NeedleLoRAJob('atlas',str(data),str(out)),runner=runner)
+except (ValueError,OSError):print('refused');raise SystemExit(0)
+raise SystemExit(9)
+'''
+ p=subprocess.run([sys.executable,'-c',script,str(tmp_path)],capture_output=True,text=True,timeout=2)
+ assert p.returncode==0 and 'refused' in p.stdout

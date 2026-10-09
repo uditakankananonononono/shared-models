@@ -110,6 +110,8 @@ escalated. Python 3.10.12, Linux x86_64, CPU only. See `evidence/needle-real.txt
 Weights: 35,335,380 bytes, SHA-256
 `c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38`.
 Sources: https://huggingface.co/Cactus-Compute/needle3 and the installed package.
+
+Newer upstream, read not run (2026-10-09): the `needle3/python` folder also lists engines 3.1.0 and 3.2.0, and the PyPI wheel cactus-needle 3.1.3 pins engine 3.2.0 in `needle/agent/fetch.py`. This repo has only been run against cactus-needle 3.0.5 with engine 3.0.2; nothing was executed against 3.1.3 or 3.2.0 (the build sandbox has about 1 GB RAM). Treat bumping the pinned `cactus-needle` as untested until `scripts/verify_needle_live.py` is re-run on it.
 This verifies inference, not training or acceptance in all three product workflows.
 
 ## Private endpoint trust and error contract

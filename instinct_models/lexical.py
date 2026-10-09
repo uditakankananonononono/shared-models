@@ -47,6 +47,9 @@ def _text(content) -> str:
     return ""
 
 
+MAX_ARG_CHARS = 2000  # extracted argument values longer than this are dropped, never truncated
+
+
 class LexicalToolModel:
     def __init__(self, min_confidence: float = 0.6, alpha: float = 0.3):
         self.min_confidence, self.alpha = min_confidence, alpha
@@ -58,8 +61,26 @@ class LexicalToolModel:
         self.trained_rows = 0
 
     # ---- training -------------------------------------------------------
+    @staticmethod
+    def _check_row(i: int, r) -> None:
+        def bad(why):
+            raise ValueError(f"training row {i}: {why}")
+        if not isinstance(r, dict) or not isinstance(r.get("query"), str):
+            bad("must be an object with a text 'query'")
+        tools, answers = r.get("tools", []), r.get("answers", [])
+        if not isinstance(tools, list) or any(not isinstance(t, dict) or not isinstance(t.get("name"), str) or not t["name"] for t in tools):
+            bad("'tools' must be a list of objects with a text name")
+        if not isinstance(answers, list) or any(not isinstance(a, dict) or not isinstance(a.get("name"), str) for a in answers):
+            bad("'answers' must be a list of objects with a text name")
+        for a in answers:
+            if not isinstance(a.get("arguments") or {}, dict):
+                bad("answer 'arguments' must be an object")
+
     def fit(self, rows: list[dict]) -> "LexicalToolModel":
-        """rows: Needle-format records {query, tools, answers}."""
+        """rows: Needle-format records {query, tools, answers}. Malformed rows raise ValueError naming the row."""
+        rows = list(rows)
+        for i, r in enumerate(rows):
+            self._check_row(i, r)
         for r in rows:
             q = r["query"]
             label = r["answers"][0]["name"] if r.get("answers") else NONE
@@ -159,6 +180,8 @@ class LexicalToolModel:
             else:
                 cues = self.cues.get(f"{tool['name']}.{p}")
                 val = self._span_after_cue(query, set(cues or []), set(self.ends.get(f"{tool['name']}.{p}") or [])) or (quoted.pop(0) if quoted else None)
+            if val is not None and len(str(val)) > MAX_ARG_CHARS:
+                val = None  # too long to be a plausible argument: leave it out (a required one makes the call abstain)
             if val is not None and str(val).casefold() in query.casefold():
                 out[p] = val
         return out
@@ -184,6 +207,8 @@ class LexicalToolModel:
 
     def predict(self, query: str, tools: list[dict]) -> dict | None:
         """Return {name, arguments, confidence} or None (abstain => escalate)."""
+        if not isinstance(query, str) or not isinstance(tools, list):
+            return None
         by = {t["name"]: t for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str) and t["name"]}
         if not by:
             return None

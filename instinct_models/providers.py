@@ -57,6 +57,10 @@ def http_json(url: str, body: dict, headers: dict, timeout: float) -> dict:
         raise ProviderError("provider returned invalid JSON") from None
 
 
+def _reject_constant(name: str):
+    raise ValueError(f"non-finite JSON constant {name}")  # NaN/Infinity are not valid JSON arguments
+
+
 def message_text(content) -> str:
     """Plain text of a chat message's content (string, content-parts list, or null)."""
     if isinstance(content, str):
@@ -152,11 +156,11 @@ class _OpenAICompat(Provider):
                 args = fn["arguments"]
                 if not isinstance(args, str):
                     raise ValueError()
-                args = json.loads(args)
+                args = json.loads(args, parse_constant=_reject_constant)
                 if not isinstance(args, dict):
                     raise ValueError()
                 calls.append({"name": name, "arguments": args})
-        except (KeyError, IndexError, TypeError, ValueError, AttributeError, UnicodeError):
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError, UnicodeError, RecursionError):
             raise ProviderError("provider returned malformed response or tool call") from None
         return ChatResult(self.name, self.model, content or "", calls, data)
 
@@ -355,7 +359,7 @@ class NeedleLocal(Provider):
         if not isinstance(validation, dict):
             raise ProviderError("Needle returned malformed validation") from None
         conf = out.get("confidence")
-        if calls and not self.weights and isinstance(conf, (int, float)) and conf < self.min_confidence:
+        if calls and not self.weights and isinstance(conf, (int, float)) and not conf >= self.min_confidence:  # NaN fails >=, so it escalates too
             calls = []  # low confidence: let the router escalate
         # validation.ungrounded is written by needle/__init__.py _annotate_ungrounded (cactus-needle 3.0.5).
         if calls and validation.get("ungrounded"):

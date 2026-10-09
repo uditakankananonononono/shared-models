@@ -90,6 +90,8 @@ def _load_file(path: str) -> dict:
     return data
 
 
+# Flag asymmetry (deliberate): env flags (TRUST_REMOTE, ALLOW_HOSTED, ALLOW_CLEARTEXT_REMOTE) treat any junk value as false, which
+# is fail-closed and avoids a startup error on an env typo; config-file flags are parsed strictly (_as_bool) and raise.
 def load_config(env: dict | None = None, path: str | None = None) -> ProductConfig:
     e = os.environ if env is None else env
     g = lambda k, d=None: (e.get(f"INSTINCT_{k}") or d)

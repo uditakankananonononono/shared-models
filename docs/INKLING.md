@@ -28,6 +28,8 @@ Then `INSTINCT_INKLING_LOCAL_URL=http://<server>:8000/v1`,
 `INSTINCT_INKLING_LOCAL_MODEL=thinkingmachines/Inkling-Small-NVFP4`.
 Weights are public (not gated), so no HF token is needed to download.
 
+Warning: `http://<server>:8000/v1` to a non-loopback host is unencrypted. Prompts and answers, including private ones, travel in clear text, and the API-key guard does not cover calls made without a key. Put the server behind https (or an SSH tunnel to a loopback port) before sending anything private.
+
 ## Fine-tuning Inkling
 Needs Thinking Machines' Tinker service (paid) or 180 GB+ of GPU memory. Not part of this
 package; per-product training here is Needle LoRA.

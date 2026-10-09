@@ -132,6 +132,8 @@ hosted HF routing or bypass Hermes/OpenClaw's loopback rules. Remote endpoints
 still need HTTP/HTTPS, no URL credentials, no query/fragment, and a valid port.
 Injected transports are operator code and must uphold the no-redirect policy.
 
+**Warning: plain http to a non-loopback host is unencrypted.** Prompts and answers, including private ones, cross the network in clear text. The API-key guard (a key is refused over plain http to a non-loopback host) does not cover calls made without a key. Prefer https, or keep the model on loopback.
+
 Private hosted routes and telemetry-enabled Needle are refused. Custom providers
 fail closed unless they implement `allows_private()`. Direct `chat()` has no private
 flag; callers carrying private data must use `Router.run(Task(..., private=True))`.

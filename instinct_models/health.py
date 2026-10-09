@@ -7,6 +7,7 @@ refused, including same-origin redirects; configure the final endpoint directly.
 """
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -50,16 +51,22 @@ def hf_token_valid(token: str | None, timeout: float = 15) -> bool | str:
         return False if e.code in (401, 403) else f"HTTP {e.code}"
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
         return f"unreachable: {getattr(e, 'reason', e)}"
+    except (http.client.HTTPException, RecursionError):
+        return "unreachable: malformed response"
 
 
 def probe(base_url: str, model: str | None, api_key: str | None = None, timeout: float = 15) -> dict:
     """Never raises. ok=True means the server answered (and, on HF, the token is valid)."""
+    if not isinstance(base_url, str):
+        return {"base_url": None, "ok": False, "error": "base_url must be text"}
     try:
         data = _get(base_url.rstrip("/") + "/models", api_key, timeout)
     except urllib.error.HTTPError as e:
         return {"base_url": base_url, "ok": False, "error": f"HTTP {e.code}"}
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
         return {"base_url": base_url, "ok": False, "error": str(getattr(e, "reason", e))}
+    except (http.client.HTTPException, RecursionError):
+        return {"base_url": base_url, "ok": False, "error": "malformed response"}  # truncated body, bad status line/chunking, absurd JSON nesting, invalid URL
     if not isinstance(data, dict) or not isinstance(data.get("data"), list):
         return {"base_url": base_url, "ok": False, "error": "invalid model-list response"}
     if any(not isinstance(m, dict) or not isinstance(m.get("id"), str) for m in data["data"]):

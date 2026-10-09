@@ -83,6 +83,15 @@ class Provider(ABC):
         """One chat turn; raises ProviderError / ProviderUnavailable on failure."""
 
 
+def _key_safe_url(url: str) -> bool:
+    """A bearer key may only go over https, or over http to a loopback host."""
+    try:
+        u = urlsplit(url)
+        return u.scheme == "https" or (u.scheme == "http" and u.hostname in ("127.0.0.1", "localhost", "::1"))
+    except ValueError:
+        return False
+
+
 class _OpenAICompat(Provider):
     def __init__(self, base_url: str | None, model: str | None, api_key: str | None = None,
                  transport: Transport = http_json, timeout: float = 120, *, trusted_remote: bool = False):
@@ -114,6 +123,8 @@ class _OpenAICompat(Provider):
         body: dict[str, Any] = {"model": self.model, "messages": messages, "max_tokens": max_tokens}
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
+        if self.api_key and not _key_safe_url(self.base_url):
+            raise ProviderUnavailable(f"{self.name}: refusing to send an API key over plain http to a non-loopback host")
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         try:
             data = self.transport(f"{self.base_url}/chat/completions", body, headers, self.timeout)

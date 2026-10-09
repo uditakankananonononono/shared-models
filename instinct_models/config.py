@@ -70,13 +70,19 @@ def _as_bool(v, name: str = "allow_hosted") -> bool:
 
 
 def _load_file(path: str) -> dict:
-    text = Path(path).read_text()
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{path}: not valid UTF-8 text") from exc
     if path.endswith((".yaml", ".yml")):
         try:
             import yaml  # optional
         except ImportError as exc:
             raise ValueError("YAML config needs PyYAML; use JSON instead") from exc
-        return yaml.safe_load(text) or {}
+        try:
+            return yaml.safe_load(text) or {}
+        except (yaml.YAMLError, RecursionError) as exc:
+            raise ValueError(f"{path}: not valid YAML") from exc
     try:
         data = json.loads(text)
     except (ValueError, RecursionError) as exc:

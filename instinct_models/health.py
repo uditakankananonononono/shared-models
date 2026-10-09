@@ -20,8 +20,19 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _key_safe(url: str) -> bool:
+    """A bearer key may only go over https, or over http to a loopback host."""
+    try:
+        u = urllib.parse.urlsplit(url)
+        return u.scheme == "https" or (u.scheme == "http" and u.hostname in ("127.0.0.1", "localhost", "::1"))
+    except ValueError:
+        return False
+
+
 def _get(url: str, api_key: str | None, timeout: float) -> dict:
     h = {"User-Agent": "instinct-models"}
+    if api_key and not _key_safe(url):
+        raise ValueError("refusing to send an API key over plain http to a non-loopback host")
     if api_key:
         h["Authorization"] = f"Bearer {api_key}"
     opener = urllib.request.build_opener(_NoRedirect())

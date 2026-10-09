@@ -54,7 +54,10 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
         raise ValueError("dataset changed since its manifest was written; rebuild it")
     if runner is _run and shutil.which(cli) is None:
         raise RuntimeError("needle CLI not found; pip install cactus-needle")
-    out = Path(job.out_dir); out.mkdir(parents=True, exist_ok=True)
+    out = Path(job.out_dir)
+    if out.is_symlink():
+        raise ValueError("training output directory must not be a symlink")
+    out.mkdir(parents=True, exist_ok=True)
     reg = out / "registry.jsonl"
     if reg.is_symlink() or (reg.exists() and not reg.is_file()):
         raise ValueError("training registry must be a regular non-symlink file")

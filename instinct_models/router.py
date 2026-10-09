@@ -81,6 +81,10 @@ class Router:
             except Exception as exc:  # noqa: BLE001 - one broken provider must not stop the chain
                 out.attempts.append(RouteAttempt(p.name, "error", "provider failed" if task.private else f"{type(exc).__name__}: {exc}"[:300]))
                 continue
+            if not isinstance(res, ChatResult) or not isinstance(res.tool_calls, list):
+                # a provider that returns the wrong shape is a failed provider: record it and keep escalating
+                out.attempts.append(RouteAttempt(p.name, "error", "provider failed" if task.private else "provider returned a malformed result"))
+                continue
             if task.tools and not res.tool_calls and isinstance(p, (NeedleLocal, LexicalLocal)):
                 out.attempts.append(RouteAttempt(p.name, "escalated", "no tool call"))
                 continue

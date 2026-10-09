@@ -45,11 +45,22 @@ def _sha(p: Path) -> str:
 def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "needle") -> dict:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", job.product or ""):
         raise ValueError(f"invalid product name {job.product!r}")
+    if isinstance(job.epochs, bool) or not isinstance(job.epochs, int) or job.epochs < 1:
+        raise ValueError("epochs must be a positive integer")
+    if isinstance(job.val_split, bool) or not isinstance(job.val_split, (int, float)) or not 0 <= job.val_split < 1:
+        raise ValueError("val_split must be a number in [0, 1)")  # also rejects NaN
+    if not isinstance(job.base_checkpoint, str) or not job.base_checkpoint or job.base_checkpoint.startswith("-"):
+        raise ValueError("base_checkpoint must be a path, not an option")
     data = Path(job.dataset_jsonl)
     if not data.is_file():
         raise FileNotFoundError(job.dataset_jsonl)
     manifest_path = Path(str(data) + ".manifest.json")
-    ds_manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    try:
+        ds_manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    except (ValueError, RecursionError) as exc:
+        raise ValueError("dataset manifest is not valid JSON; rebuild it") from exc
+    if not isinstance(ds_manifest, dict):
+        raise ValueError("dataset manifest must be a JSON object; rebuild it")
     if ds_manifest and ds_manifest.get("sha256") != _sha(data):
         raise ValueError("dataset changed since its manifest was written; rebuild it")
     if runner is _run and shutil.which(cli) is None:

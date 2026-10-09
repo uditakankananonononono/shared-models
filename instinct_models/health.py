@@ -32,6 +32,8 @@ def _key_safe(url: str) -> bool:
 
 def _get(url: str, api_key: str | None, timeout: float) -> dict:
     h = {"User-Agent": "instinct-models"}
+    if api_key and (not isinstance(api_key, str) or not api_key.isascii() or not api_key.isprintable() or any(c.isspace() for c in api_key)):
+        raise ValueError("API key contains characters that cannot be sent in a header")  # checked first: http.client's own error would echo the key
     if api_key and not _key_safe(url):
         raise ValueError("refusing to send an API key over plain http to a non-loopback host")
     if api_key:

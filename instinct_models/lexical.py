@@ -164,12 +164,16 @@ class LexicalToolModel:
         out: dict = {}
         quoted = [a or b for a, b in _QUOTED.findall(query)]
         for p, spec in props.items():
+            if not isinstance(p, str):
+                continue  # non-text property name cannot be an argument name
             if not isinstance(spec, dict):
                 spec = {}
             t = spec.get("type", "string")
             val = None
-            if spec.get("enum"):
+            if isinstance(spec.get("enum"), list) and spec["enum"]:
                 val = next((e for e in spec["enum"] if str(e).casefold() in query.casefold()), None)
+            elif spec.get("enum"):
+                val = None  # malformed enum (not a list): no value can match
             elif t in ("integer", "number"):
                 m = _NUM.search(query)
                 if m is None or (t == "integer" and "." in m.group()):
@@ -223,6 +227,7 @@ class LexicalToolModel:
         required = params.get("required") if isinstance(params, dict) else None
         if not isinstance(required, list):
             required = []
+        required = [r for r in required if isinstance(r, str)]  # non-text entries cannot name an argument
         if any(r not in args for r in required):
             return None
         return {"name": name, "arguments": args, "confidence": round(conf, 3)}

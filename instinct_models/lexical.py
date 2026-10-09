@@ -157,7 +157,10 @@ class LexicalToolModel:
         return best, math.exp(logp[best] - m) / z
 
     def extract(self, query: str, tool: dict) -> dict:
-        props = (tool.get("parameters") or {}).get("properties", {})
+        params = tool.get("parameters")
+        props = params.get("properties") if isinstance(params, dict) else None
+        if not isinstance(props, dict):
+            props = {}  # malformed schema shape: no extractable parameters
         out: dict = {}
         quoted = [a or b for a, b in _QUOTED.findall(query)]
         for p, spec in props.items():
@@ -216,7 +219,10 @@ class LexicalToolModel:
         if name == NONE or conf < self.min_confidence:
             return None
         args = self.extract(query, by[name])
-        required = (by[name].get("parameters") or {}).get("required", [])
+        params = by[name].get("parameters")
+        required = params.get("required") if isinstance(params, dict) else None
+        if not isinstance(required, list):
+            required = []
         if any(r not in args for r in required):
             return None
         return {"name": name, "arguments": args, "confidence": round(conf, 3)}

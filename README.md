@@ -65,6 +65,8 @@ if jev.available():
 
 Never send private state to hosted providers. HTTP 429/529 is retried; 401 is reported without falling back to another paid route.
 
+See docs/CLAIM_LEDGER.md for what each claim here is backed by.
+
 ## Tests
 
 `python3 -m unittest discover -s tests`

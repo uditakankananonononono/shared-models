@@ -18,6 +18,7 @@ Last checked against the branch tip with `python3 -m unittest discover -s tests`
 | Inkling, Ornith, Hermes answer a prompt | UNSUPPORTED | No weights ship here and none was run to a live answer. This sandbox has 2 CPUs, about 1 GB RAM and no llama.cpp or Ollama, so no local model can run in it. Hosted Inkling needs an HF token that was never provided. |
 | `train_needle_lora` runs a real `needle finetune` | UNSUPPORTED | Never exercised against a real install. The training extra needs jax/flax/optax and the build sandbox has 2 CPUs and about 1 GB RAM, so it cannot run there. Environment limit, not a result. |
 | Needle engine pin is current | SCOPED | Read-only check 2026-10-09: HF needle3/python lists engines 3.0.0-3.0.2, 3.1.0, 3.2.0; cactus-needle 3.1.3 pins 3.2.0. Only 3.0.5 + engine 3.0.2 has been run (builder-reported). 3.1.3 / 3.2.0 untested. |
+| Provenance capture script reports endpoint-to-weights binding on a real server | UNSUPPORTED | `scripts/capture_provenance.py` is UNRUN against any real server (no serving host here). Only its logic is tested with fakes (`test_capture_provenance.py`); see `docs/PROVENANCE_CAPTURE.md`. |
 | Ornith RL training | NOT BUILT | Only a preflight that refuses without roughly 80 GB GPU memory. |
 | Inkling fine-tune | NOT BUILT | Documented as a future route only. |
 | AI Library catalog is read-only, robots-aware, cached, rate-limited | VERIFIED | test_catalog_*.py. Scraper only; the site's pages were not re-checked today. |

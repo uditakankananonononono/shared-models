@@ -94,8 +94,9 @@ def _key_safe_url(url: str) -> bool:
 
 class _OpenAICompat(Provider):
     def __init__(self, base_url: str | None, model: str | None, api_key: str | None = None,
-                 transport: Transport = http_json, timeout: float = 120, *, trusted_remote: bool = False):
+                 transport: Transport = http_json, timeout: float = 120, *, trusted_remote: bool = False, allow_cleartext_remote: bool = False):
         self.trusted_remote = trusted_remote
+        self.allow_cleartext_remote = allow_cleartext_remote
         self.base_url, self.model, self.api_key, self.transport, self.timeout = (base_url or "").rstrip("/"), model, api_key, transport, timeout
 
     def allows_private(self) -> bool:
@@ -104,7 +105,8 @@ class _OpenAICompat(Provider):
         try:
             if self.trusted_remote:
                 u = urlsplit(self.base_url)
-                return (u.scheme in ("http", "https") and bool(u.hostname)
+                return ((u.scheme == "https" or (u.scheme == "http" and self.allow_cleartext_remote))
+                        and bool(u.hostname)
                         and u.username is None and u.password is None
                         and "?" not in self.base_url and "#" not in self.base_url
                         and (u.port is None or 0 < u.port <= 65535)

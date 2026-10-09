@@ -63,18 +63,94 @@ class Capture(unittest.TestCase):
         self.assertFalse(r["weights"]["files"][0]["matches_expected"])
         self.assertFalse(r["all_requested_checks_passed"])
 
+    def _hold(self, path):
+        """A child process (descendant of this test process) that holds `path` open."""
+        import subprocess
+        import sys
+        c = subprocess.Popen([sys.executable, "-c", "import sys,time;f=open(sys.argv[1],'rb');print('ready',flush=True);time.sleep(60)", path],
+                             stdout=subprocess.PIPE)
+        self.addCleanup(lambda: (c.kill(), c.wait(), c.stdout.close()))
+        c.stdout.readline()
+        return c.pid
+
     @unittest.skipUnless(os.path.isdir("/proc/self/fd"), "Linux /proc needed")
-    def test_binding_confirmed_only_when_pid_holds_the_hashed_file(self):
+    def test_binding_confirmed_needs_hash_exact_inode_and_port_link(self):
         p, d = self.weights()
+        exp = {os.path.basename(p): d}
         with open(p, "rb"):
-            r = cp.capture(self.url, "fake-model", [p], pid=os.getpid())
-            self.assertEqual(r["binding"]["verdict"], "confirmed")
-        r = cp.capture(self.url, "fake-model", [p], pid=os.getpid())  # file closed now
+            r = cp.capture(self.url, "fake-model", [p], exp, pid=os.getpid())  # this process serves the port and holds the file
+            self.assertEqual(r["binding"]["verdict"], "confirmed", r["binding"])
+            self.assertEqual(r["binding"]["pid_port_relation"], "same")
+            r = cp.capture(self.url, "fake-model", [p], None, pid=os.getpid())  # no expected hash: never confirmed
+            self.assertEqual(r["binding"]["verdict"], "unverified")
+            self.assertIn("expect-sha256", r["binding"]["reason"])
+            self.assertFalse(r["all_requested_checks_passed"])
+        r = cp.capture(self.url, "fake-model", [p], exp, pid=os.getpid())  # file closed
         self.assertEqual(r["binding"]["verdict"], "unverified")
-        self.assertFalse(r["all_requested_checks_passed"])
-        r = cp.capture(self.url, "fake-model", [p], pid=2 ** 22 + 12345)  # no such process
+        r = cp.capture(self.url, "fake-model", [p], exp, pid=2 ** 22 + 12345)  # no such process
         self.assertEqual(r["binding"]["verdict"], "unverified")
         self.assertIsNotNone(r["binding"]["process_error"])
+
+    @unittest.skipUnless(os.path.isdir("/proc/self/fd"), "Linux /proc needed")
+    def test_runner_child_of_the_listener_is_accepted(self):
+        p, d = self.weights()
+        child = self._hold(p)  # Ollama shape: the server owns the port, a child process holds the weights
+        r = cp.capture(self.url, "fake-model", [p], {os.path.basename(p): d}, pid=child)
+        self.assertEqual(r["binding"]["pid_port_relation"], "pid_is_descendant_of_listener")
+        self.assertEqual(r["binding"]["verdict"], "confirmed", r["binding"])
+
+    @unittest.skipUnless(os.path.isdir("/proc/self/fd"), "Linux /proc needed")
+    def test_file_replaced_after_open_is_never_confirmed(self):
+        p, d = self.weights(b"OLD weights")
+        with open(p, "rb"):
+            new = p + ".new"
+            open(new, "wb").write(b"NEW weights")
+            os.replace(new, p)  # the process still holds the OLD inode, shown as "(deleted)"
+            nd = hashlib.sha256(b"NEW weights").hexdigest()
+            r = cp.capture(self.url, "fake-model", [p], {os.path.basename(p): nd}, pid=os.getpid())
+            self.assertEqual(r["binding"]["verdict"], "unverified", r["binding"])
+            self.assertTrue(r["binding"]["stale_or_replaced"])
+            self.assertTrue(r["weights"]["files"][0]["matches_expected"])  # file identity alone was fine: binding is what failed
+
+    @unittest.skipUnless(os.path.isdir("/proc/self/fd"), "Linux /proc needed")
+    def test_pid_not_tied_to_the_listening_port_is_unverified(self):
+        import subprocess
+        import sys
+        code = ("import http.server,os;s=http.server.HTTPServer(('127.0.0.1',0),http.server.BaseHTTPRequestHandler);"
+                "print(os.getpid(),s.server_address[1],flush=True);s.serve_forever()")
+        # the shell exits at once, so the listener is orphaned and unrelated to this process
+        o = subprocess.Popen(["sh", "-c", f"{sys.executable} -c \"{code}\" &"], stdout=subprocess.PIPE)
+        lpid, lport = (int(x) for x in o.stdout.readline().split())
+        self.addCleanup(lambda: (os.kill(lpid, 9), o.wait(), o.stdout.close()))
+        p, d = self.weights()
+        with open(p, "rb"):
+            r = cp.capture(f"http://127.0.0.1:{lport}/v1", None, [p], {os.path.basename(p): d}, pid=os.getpid())
+        self.assertEqual(r["binding"]["pid_port_relation"], "unrelated")
+        self.assertEqual(r["binding"]["verdict"], "unverified")
+        self.assertIn("operator-asserted", r["binding"]["reason"])
+
+    def test_redirects_are_not_followed(self):
+        class R(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Location", Capture.url + "/models")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+        srv = HTTPServer(("127.0.0.1", 0), R)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        r = cp.capture(f"http://127.0.0.1:{srv.server_address[1]}/v1", "fake-model", [])
+        self.assertFalse(r["checks"]["reachable"])
+        self.assertEqual(r["reachability"]["get_models_status"], 302)
+
+    def test_checks_are_never_empty_so_nothing_passes_vacuously(self):
+        r = cp.capture("http://127.0.0.1:1/v1", None, [])
+        self.assertTrue(r["checks"])
+        self.assertFalse(r["all_requested_checks_passed"])
 
     def test_non_loopback_and_odd_urls_are_refused(self):
         for u in ("http://example.com:80/v1", "https://127.0.0.1:8080/v1", "http://127.0.0.1/v1", "http://10.0.0.5:8080/v1", "ftp://127.0.0.1:1"):

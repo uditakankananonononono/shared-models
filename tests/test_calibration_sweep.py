@@ -20,6 +20,8 @@ class CalibrationTests(unittest.TestCase):
             res = calibration_sweep(p)
         for s in res["sweep"]:
             self.assertEqual(s["served_right"] + s["served_wrong"] + s["abstained"], res["test_rows"])
+        for s in res["sweep"]:
+            self.assertEqual(s["abstained_off_topic_correct"] + s["abstained_missed_call"], s["abstained"])
         ab = [s["abstained"] for s in res["sweep"]]
         self.assertEqual(ab, sorted(ab))
         print("calibration (synthetic, harness check only):", res["sweep"])

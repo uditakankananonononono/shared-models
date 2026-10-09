@@ -48,7 +48,10 @@ def calibration_sweep(jsonl_path: str | Path, *, holdout_percent: int = 25,
 
     Naive Bayes confidences are usually too high, so the right threshold has to
     come from a product's own held-out rows. This reports the trade-off; it does
-    not pick one. Served-wrong counts a wrong tool, wrong arguments, or any call
+    not pick one. "abstained" is split into correct off-topic abstentions and
+    missed calls (lost recall). Thresholds compared on the same held-out rows
+    are optimistic: confirm any chosen value on a separate confirmation set.
+    Served-wrong counts a wrong tool, wrong arguments, or any call
     on an off-topic row.
     """
     rows = [json.loads(l) for l in Path(jsonl_path).read_text().splitlines() if l.strip()]
@@ -59,15 +62,20 @@ def calibration_sweep(jsonl_path: str | Path, *, holdout_percent: int = 25,
     out = []
     for t in thresholds:
         model = LexicalToolModel(min_confidence=t).fit(train)
-        right = wrong = abstain = 0
+        right = wrong = abstain = off_abstain = missed = 0
         for r in test:
             pred = model.predict(r["query"], r["tools"])
             if pred is None:
                 abstain += 1
+                if r["answers"]:
+                    missed += 1
+                else:
+                    off_abstain += 1
                 continue
             want = r["answers"][0] if r["answers"] else None
             ok = want is not None and pred["name"] == want["name"] and pred["arguments"] == (want.get("arguments") or {})
             right += ok
             wrong += not ok
-        out.append({"min_confidence": t, "served_right": right, "served_wrong": wrong, "abstained": abstain})
+        out.append({"min_confidence": t, "served_right": right, "served_wrong": wrong, "abstained": abstain,
+                    "abstained_off_topic_correct": off_abstain, "abstained_missed_call": missed})
     return {"test_rows": len(test), "train_rows": len(train), "sweep": out}

@@ -8,6 +8,26 @@ from pathlib import Path
 from ..lexical import LexicalToolModel
 
 
+def _load_rows(jsonl_path) -> list[dict]:
+    """Read and validate rows; any problem is a ValueError naming the file line."""
+    rows = []
+    for n, line in enumerate(Path(jsonl_path).read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            r = json.loads(line)
+        except (ValueError, RecursionError) as exc:
+            raise ValueError(f"line {n}: not valid JSON") from exc
+        try:
+            LexicalToolModel._check_row(n, r)
+        except ValueError as exc:
+            raise ValueError(f"line {n}: {str(exc).split(': ', 1)[-1]}") from None
+        if "tools" not in r or "answers" not in r:
+            raise ValueError(f"line {n}: row needs 'tools' and 'answers'")
+        rows.append(r)
+    return rows
+
+
 def evaluate_lexical(jsonl_path: str | Path, *, holdout_percent: int = 25, **model_kw) -> dict:
     """Deterministic hold-out split by query hash; reports exact-call accuracy and abstention.
 
@@ -16,7 +36,7 @@ def evaluate_lexical(jsonl_path: str | Path, *, holdout_percent: int = 25, **mod
     """
     if not 1 <= holdout_percent <= 50:
         raise ValueError("holdout_percent must be 1..50")
-    rows = [json.loads(l) for l in Path(jsonl_path).read_text().splitlines() if l.strip()]
+    rows = _load_rows(jsonl_path)
     train, test = [], []
     for r in rows:
         (test if zlib.crc32(r["query"].encode()) % 100 < holdout_percent else train).append(r)
@@ -54,7 +74,7 @@ def calibration_sweep(jsonl_path: str | Path, *, holdout_percent: int = 25,
     Served-wrong counts a wrong tool, wrong arguments, or any call
     on an off-topic row.
     """
-    rows = [json.loads(l) for l in Path(jsonl_path).read_text().splitlines() if l.strip()]
+    rows = _load_rows(jsonl_path)
     train = [r for r in rows if zlib.crc32(r["query"].encode()) % 100 >= holdout_percent]
     test = [r for r in rows if zlib.crc32(r["query"].encode()) % 100 < holdout_percent]
     if not train or not test:

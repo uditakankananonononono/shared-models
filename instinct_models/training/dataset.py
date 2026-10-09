@@ -49,12 +49,20 @@ def _values(obj) -> list[str]:
 
 
 def check_row(row: ExampleRow) -> str | None:
+    if not isinstance(row.query, str):
+        return "query must be text"
     if not isinstance(row.tools, list) or not all(isinstance(t, dict) for t in row.tools):
         return "tools must be a list of objects"
     if not isinstance(row.answers, list) or not all(isinstance(c, dict) for c in row.answers):
         return "answers must be a list of objects"
+    if any(not isinstance(t.get("name"), str) or not t["name"].strip() for t in row.tools):
+        return "every tool needs a non-empty text name"
     names = {t.get("name") for t in row.tools}
+    if len(names) != len(row.tools):
+        return "duplicate tool name"
     for call in row.answers:
+        if not isinstance(call.get("name"), str):
+            return "answer call name must be text"
         if call.get("name") not in names:
             return f"answer calls unknown tool {call.get('name')!r}"
         args = call.get("arguments", {})
@@ -67,6 +75,10 @@ def check_row(row: ExampleRow) -> str | None:
                 return "blank argument value (omit optional fields without evidence)"
             if v.casefold() not in row.query.casefold():
                 return f"argument value {v!r} is not present in the query"
+    if row.reasoning is not None and not isinstance(row.reasoning, str):
+        return "reasoning must be text"
+    if row.system is not None and not isinstance(row.system, str):
+        return "system must be text"
     if not row.query.strip():
         return "empty query"
     return None
@@ -92,7 +104,12 @@ def build_needle_jsonl(dataset: DomainDataset, out_path: str | Path, *, min_off_
             rec["reasoning"] = row.reasoning
         if row.system:
             rec["system"] = row.system
-        key = json.dumps(rec, sort_keys=True, ensure_ascii=False)
+        try:
+            key = json.dumps(rec, sort_keys=True, ensure_ascii=False, allow_nan=False)
+            key.encode("utf-8")
+        except (TypeError, ValueError, RecursionError):
+            dropped.append({"source_ref": row.source_ref, "reason": "row is not strict-JSON / UTF-8 serializable"})
+            continue
         if key in seen:
             dropped.append({"source_ref": row.source_ref, "reason": "duplicate of an earlier row"})
             continue

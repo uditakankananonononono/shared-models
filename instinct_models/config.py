@@ -9,7 +9,9 @@ Env (prefix INSTINCT_):
   INSTINCT_ORNITH_MODEL        model tag as pulled locally (no default: must match what she pulled)
   INSTINCT_NEEDLE_WEIGHTS      path to a product .cact (tuned) - empty means the base Needle model
   INSTINCT_ALLOW_HOSTED        1 to allow metered hosted HF router for non-private tasks (default 0)
+  INSTINCT_ALLOW_CLEARTEXT_REMOTE 1 to let trusted remote endpoints use plain http (UNSAFE; default 0)
   INSTINCT_TRUST_REMOTE        1 explicitly trusts configured Ornith/Inkling remote endpoints for private tasks
+  INSTINCT_ALLOW_CLEARTEXT_REMOTE  1 lets trusted remote endpoints use plain http (UNSAFE, default 0; https is required otherwise)
   INSTINCT_JEV_API_KEY         TypeSafe AI direct evaluation API key (optional; falls back to JEV_API_KEY).
   INSTINCT_AI_GATEWAY_API_KEY  Vercel AI Gateway key for Jev (optional; falls back to AI_GATEWAY_API_KEY).
   INSTINCT_LEXICAL_TRAIN_JSONL Needle-format JSONL (from build_needle_jsonl) to train the built-in lexical tool model
@@ -41,6 +43,7 @@ class ProductConfig:
     hermes_model: str | None = None
     allow_hosted: bool = False
     trust_remote: bool = False
+    allow_cleartext_remote: bool = False
     jev_api_key: str | None = None
     extra: dict = field(default_factory=dict)
 
@@ -56,14 +59,14 @@ _STR_FIELDS = {"inkling_local_url", "inkling_local_model", "hf_model", "ornith_u
                "lexical_train_jsonl", "hermes_url", "hermes_model", "jev_api_key"}
 
 
-def _as_bool(v) -> bool:
+def _as_bool(v, name: str = "allow_hosted") -> bool:
     if isinstance(v, bool):
         return v
     if isinstance(v, int) and v in (0, 1):
         return bool(v)
     if isinstance(v, str) and v.strip().lower() in _TRUE + _FALSE:
         return v.strip().lower() in _TRUE
-    raise ValueError(f"allow_hosted must be true or false, got {v!r}")
+    raise ValueError(f"{name} must be true or false, got {v!r}")
 
 
 def _load_file(path: str) -> dict:
@@ -89,6 +92,7 @@ def load_config(env: dict | None = None, path: str | None = None) -> ProductConf
                         hf_model=g("HF_MODEL", "thinkingmachines/Inkling-Small"), ornith_url=g("ORNITH_URL"),
                         ornith_model=g("ORNITH_MODEL"), needle_weights=g("NEEDLE_WEIGHTS"), hermes_url=g("HERMES_URL"), lexical_train_jsonl=g("LEXICAL_TRAIN_JSONL"),
                         hermes_model=g("HERMES_MODEL"),
+                        allow_cleartext_remote=g("ALLOW_CLEARTEXT_REMOTE", "0").strip().lower() in ("1", "true", "yes", "on"),
                         trust_remote=g("TRUST_REMOTE", "0").strip().lower() in ("1", "true", "yes", "on"),
                         allow_hosted=g("ALLOW_HOSTED", "0").strip().lower() in ("1", "true", "yes", "on"),
                         jev_api_key=g("JEV_API_KEY") or e.get("JEV_API_KEY") or None)
@@ -101,8 +105,9 @@ def load_config(env: dict | None = None, path: str | None = None) -> ProductConf
         for k, v in data.items():
             if k in _STR_FIELDS and v is not None and not isinstance(v, str):
                 raise ValueError(f"{k} must be a string or null, got {type(v).__name__}")
-        if "allow_hosted" in data:
-            data = {**data, "allow_hosted": _as_bool(data["allow_hosted"])}
+        for flag in ("allow_hosted", "trust_remote", "allow_cleartext_remote"):
+            if flag in data:
+                data = {**data, flag: _as_bool(data[flag], flag)}
         known = {k: v for k, v in data.items() if k in ProductConfig.__dataclass_fields__ and k != "extra"}
         cfg = replace(cfg, **known, extra={k: v for k, v in data.items() if k not in known})
     return cfg

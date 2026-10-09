@@ -51,8 +51,8 @@ class Router:
     @classmethod
     def from_config(cls, cfg: ProductConfig) -> "Router":
         chain: list[Provider] = [NeedleLocal(cfg.needle_weights),
-                                 OrnithOpenAICompat(cfg.ornith_url, cfg.ornith_model, trusted_remote=cfg.trust_remote),
-                                 InklingLocal(cfg.inkling_local_url, cfg.inkling_local_model, trusted_remote=cfg.trust_remote)]
+                                 OrnithOpenAICompat(cfg.ornith_url, cfg.ornith_model, trusted_remote=cfg.trust_remote, allow_cleartext_remote=cfg.allow_cleartext_remote),
+                                 InklingLocal(cfg.inkling_local_url, cfg.inkling_local_model, trusted_remote=cfg.trust_remote, allow_cleartext_remote=cfg.allow_cleartext_remote)]
         if cfg.hermes_url and cfg.hermes_model:
             chain.append(HermesLocal(cfg.hermes_url, cfg.hermes_model))
         if cfg.lexical_train_jsonl:

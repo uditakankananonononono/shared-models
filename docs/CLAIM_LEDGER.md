@@ -16,6 +16,8 @@ Last checked against the branch tip with `python3 -m unittest discover -s tests`
 | Needle fine-tune never uploads and refuses a changed dataset | VERIFIED | test_needle_lora_guards.py, test_readme_behaviors.py. The real `needle finetune` run has not been exercised here. |
 | Needle returns a tool call for a real query | SCOPED | One live check on linux-x86_64 on 2026-09-24 (get_weather Lagos), recorded in README; not re-run in this sandbox. Builder-reported. |
 | Inkling, Ornith, Hermes answer a prompt | UNSUPPORTED | No weights ship here and none was run to a live answer. This sandbox has 2 CPUs, about 1 GB RAM and no llama.cpp or Ollama, so no local model can run in it. Hosted Inkling needs an HF token that was never provided. |
+| `train_needle_lora` runs a real `needle finetune` | UNSUPPORTED | Never exercised against a real install. The training extra needs jax/flax/optax and the build sandbox has 2 CPUs and about 1 GB RAM, so it cannot run there. Environment limit, not a result. |
+| Needle engine pin is current | SCOPED | Read-only check 2026-10-09: HF needle3/python lists engines 3.0.0-3.0.2, 3.1.0, 3.2.0; cactus-needle 3.1.3 pins 3.2.0. Only 3.0.5 + engine 3.0.2 has been run (builder-reported). 3.1.3 / 3.2.0 untested. |
 | Ornith RL training | NOT BUILT | Only a preflight that refuses without roughly 80 GB GPU memory. |
 | Inkling fine-tune | NOT BUILT | Documented as a future route only. |
 | AI Library catalog is read-only, robots-aware, cached, rate-limited | VERIFIED | test_catalog_*.py. Scraper only; the site's pages were not re-checked today. |

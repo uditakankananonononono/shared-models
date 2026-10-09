@@ -105,7 +105,7 @@ class _OpenAICompat(Provider):
         try:
             if self.trusted_remote:
                 u = urlsplit(self.base_url)
-                return ((u.scheme == "https" or (u.scheme == "http" and self.allow_cleartext_remote))
+                return ((u.scheme == "https" or (u.scheme == "http" and (u.hostname in ("127.0.0.1", "localhost", "::1") or self.allow_cleartext_remote)))
                         and bool(u.hostname)
                         and u.username is None and u.password is None
                         and "?" not in self.base_url and "#" not in self.base_url

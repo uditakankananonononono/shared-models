@@ -9,9 +9,9 @@ Env (prefix INSTINCT_):
   INSTINCT_ORNITH_MODEL        model tag as pulled locally (no default: must match what she pulled)
   INSTINCT_NEEDLE_WEIGHTS      path to a product .cact (tuned) - empty means the base Needle model
   INSTINCT_ALLOW_HOSTED        1 to allow metered hosted HF router for non-private tasks (default 0)
-  INSTINCT_ALLOW_CLEARTEXT_REMOTE 1 to let trusted remote endpoints use plain http (UNSAFE; default 0)
   INSTINCT_TRUST_REMOTE        1 explicitly trusts configured Ornith/Inkling remote endpoints for private tasks
-  INSTINCT_ALLOW_CLEARTEXT_REMOTE  1 lets trusted remote endpoints use plain http (UNSAFE, default 0; https is required otherwise)
+  INSTINCT_ALLOW_CLEARTEXT_REMOTE  1 lets trusted remote endpoints use plain http (UNSAFE, default 0; https is required otherwise).
+                                   Env flags never error: any value other than 1/true/yes/on is read as off (fails closed).
   INSTINCT_JEV_API_KEY         TypeSafe AI direct evaluation API key (optional; falls back to JEV_API_KEY).
   INSTINCT_AI_GATEWAY_API_KEY  Vercel AI Gateway key for Jev (optional; falls back to AI_GATEWAY_API_KEY).
   INSTINCT_LEXICAL_TRAIN_JSONL Needle-format JSONL (from build_needle_jsonl) to train the built-in lexical tool model

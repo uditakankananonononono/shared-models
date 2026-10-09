@@ -21,6 +21,23 @@ class RemoteHttpsDefaultTests(unittest.TestCase):
     def test_loopback_http_unchanged(self):
         self.assertTrue(OrnithOpenAICompat("http://127.0.0.1:8080/v1", "m").allows_private())
 
+    def test_trusted_remote_does_not_lose_loopback_http(self):
+        for url in ("http://127.0.0.1:8080/v1", "http://localhost:11434/v1", "http://[::1]:8080/v1"):
+            self.assertTrue(InklingLocal(url, "m", trusted_remote=True).allows_private(), url)
+            self.assertTrue(OrnithOpenAICompat(url, "m", trusted_remote=True).allows_private(), url)
+
+    def test_config_built_chain_keeps_loopback_ornith_when_trust_remote_is_on(self):
+        cfg = load_config({"INSTINCT_PRODUCT": "atlas", "INSTINCT_ORNITH_URL": "http://127.0.0.1:11434/v1",
+                           "INSTINCT_ORNITH_MODEL": "ornith", "INSTINCT_TRUST_REMOTE": "1"})
+        ornith = [p for p in Router.from_config(cfg).providers if isinstance(p, OrnithOpenAICompat)][0]
+        self.assertTrue(ornith.allows_private())
+
+    def test_env_flags_fail_closed_on_odd_values(self):
+        base = {"INSTINCT_PRODUCT": "atlas"}
+        for v in ("maybe", "2", "off", ""):
+            c = load_config({**base, "INSTINCT_TRUST_REMOTE": v, "INSTINCT_ALLOW_CLEARTEXT_REMOTE": v})
+            self.assertFalse(c.trust_remote); self.assertFalse(c.allow_cleartext_remote)
+
     def test_config_env_and_file_flags(self):
         base = {"INSTINCT_PRODUCT": "atlas"}
         self.assertFalse(load_config(base).allow_cleartext_remote)

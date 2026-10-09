@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 import urllib.error
@@ -59,6 +60,13 @@ def http_json(url: str, body: dict, headers: dict, timeout: float) -> dict:
 
 def _reject_constant(name: str):
     raise ValueError(f"non-finite JSON constant {name}")  # NaN/Infinity are not valid JSON arguments
+
+
+def _finite_float(text: str) -> float:
+    v = float(text)
+    if not math.isfinite(v):
+        raise ValueError("float literal overflows to infinity")  # e.g. 1e999 parses to inf without calling parse_constant
+    return v
 
 
 def message_text(content) -> str:
@@ -156,7 +164,7 @@ class _OpenAICompat(Provider):
                 args = fn["arguments"]
                 if not isinstance(args, str):
                     raise ValueError()
-                args = json.loads(args, parse_constant=_reject_constant)
+                args = json.loads(args, parse_constant=_reject_constant, parse_float=_finite_float)
                 if not isinstance(args, dict):
                     raise ValueError()
                 calls.append({"name": name, "arguments": args})

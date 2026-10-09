@@ -32,12 +32,12 @@ class HostileBodies(unittest.TestCase):
                 chat_with(call(args))
 
     def test_non_finite_constants_in_arguments_are_a_provider_error(self):
-        for args in ('{"a": NaN}', '{"a": Infinity}', '{"a": [-Infinity]}'):
+        for args in ('{"a": NaN}', '{"a": Infinity}', '{"a": [-Infinity]}', '{"a": 1e999}', '{"a": [-1e999]}', '{"a": {"b": 1E400}}'):
             with self.assertRaises(ProviderError):
                 chat_with(call(args))
 
     def test_normal_arguments_still_parse(self):
-        self.assertEqual(chat_with(call('{"a": 1.5, "b": [1, 2]}')).tool_calls[0]["arguments"], {"a": 1.5, "b": [1, 2]})
+        self.assertEqual(chat_with(call('{"a": 1.5, "b": [1, 2], "c": 1e300}')).tool_calls[0]["arguments"], {"a": 1.5, "b": [1, 2], "c": 1e300})
 
     def test_needle_nan_confidence_escalates_and_good_confidence_passes(self):
         base = {"type": "call", "function_calls": [{"name": "t", "arguments": {}}]}

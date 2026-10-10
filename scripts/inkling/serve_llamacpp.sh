@@ -8,12 +8,29 @@ QUANT="${INKLING_QUANT:-UD-Q2_K_XL}"          # UD-Q3_K_XL / UD-Q4_K_XL if you h
 PORT="${INKLING_PORT:-8080}"
 DIR="${LLAMA_CPP_DIR:-$HOME/llama.cpp}"
 CUDA="${GGML_CUDA:-ON}"                         # OFF for CPU-only or Apple Metal
+# Pinned llama.cpp source for Inkling support: head of OPEN, mutable PR ggml-org/llama.cpp#25731
+# ("Add TML Inkling architecture"). Head SHA observed 2026-10-10 via `git ls-remote` on
+# refs/pull/25731/head and the GitHub PR API (head repo danielhanchen/llama.cpp, base master).
+# The PR is not merged; if its head moves, this script FAILS until a human re-reviews and updates the pin.
+PIN_PR=25731
+PIN_SHA="68cd3f6cb06b1e425ea7221af03a93099aa6ab84"
+die() { echo "serve_llamacpp.sh: FATAL: $*" >&2; exit 1; }
+if [ ! -d "$DIR/.git" ]; then
+  git clone https://github.com/ggml-org/llama.cpp "$DIR" || die "git clone failed"
+fi
+cd "$DIR"
+if [ "$(git rev-parse HEAD)" != "$PIN_SHA" ]; then
+  git fetch origin "pull/$PIN_PR/head" || die "could not fetch pull/$PIN_PR/head; refusing to fall back to an Inkling-less checkout"
+  git cat-file -e "$PIN_SHA^{commit}" 2>/dev/null \
+    || die "pinned commit $PIN_SHA not found after fetch (PR head now $(git rev-parse FETCH_HEAD); it moved or was force-pushed). Re-review and update PIN_SHA."
+  git checkout --detach "$PIN_SHA" || die "checkout of $PIN_SHA failed"
+  rm -rf "$DIR/build"   # any existing build is of a different source; rebuild from the pin
+fi
+[ "$(git rev-parse HEAD)" = "$PIN_SHA" ] || die "HEAD is not $PIN_SHA after checkout"
+cd - >/dev/null
 if [ ! -x "$DIR/build/bin/llama-server" ]; then
-  git clone https://github.com/ggml-org/llama.cpp "$DIR" 2>/dev/null || true
-  # Inkling support landed via llama.cpp PR 25731 (per the Unsloth guide); fetch it if main lacks it.
-  (cd "$DIR" && git fetch origin pull/25731/head:inkling && git checkout inkling) || true
-  cmake "$DIR" -B "$DIR/build" -DBUILD_SHARED_LIBS=OFF -DGGML_CUDA="$CUDA"
-  cmake --build "$DIR/build" --config Release -j --target llama-server
+  cmake "$DIR" -B "$DIR/build" -DBUILD_SHARED_LIBS=OFF -DGGML_CUDA="$CUDA" || die "cmake configure failed"
+  cmake --build "$DIR/build" --config Release -j --target llama-server || die "build failed"
 fi
 export LLAMA_CACHE="${LLAMA_CACHE:-$HOME/.cache/unsloth/Inkling-Small-GGUF}"
 exec "$DIR/build/bin/llama-server" -hf "unsloth/Inkling-Small-GGUF:$QUANT" \

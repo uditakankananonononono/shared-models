@@ -26,7 +26,7 @@ _TOK = re.compile(r"[A-Za-z0-9@._'-]+")
 _STOP = {"the", "a", "an", "to", "of", "and", "for", "on", "in", "by", "with", "please", "my", "is", "it"}
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
-_NUM = re.compile(r"\b\d+(?:\.\d+)?\b")
+_NUM = re.compile(r"(?<![\w.+-])[+-]?\d+(?:\.\d+)?(?![\w.+-])")
 _QUOTED = re.compile(r"\"([^\"]+)\"|'([^']+)'")
 
 
@@ -175,6 +175,7 @@ class LexicalToolModel:
                 spec = {}
             t = spec.get("type", "string")
             val = None
+            numeric_grounded = False
             if isinstance(spec.get("enum"), list) and spec["enum"]:
                 val = next((e for e in spec["enum"] if str(e).casefold() in query.casefold()), None)
             elif spec.get("enum"):
@@ -185,6 +186,7 @@ class LexicalToolModel:
                     val = None
                 else:
                     val = float(m.group()) if "." in m.group() else int(m.group())
+                    numeric_grounded = True  # full standalone token matched, not a substring
             elif "email" in p.lower() and _EMAIL.search(query):
                 val = _EMAIL.search(query).group()
             elif ("date" in p.lower() or p.lower() in ("due", "deadline")) and _DATE.search(query):
@@ -194,7 +196,7 @@ class LexicalToolModel:
                 val = self._span_after_cue(query, set(cues or []), set(self.ends.get(f"{tool['name']}.{p}") or [])) or (quoted.pop(0) if quoted else None)
             if val is not None and len(str(val)) > MAX_ARG_CHARS:
                 val = None  # too long to be a plausible argument: leave it out (a required one makes the call abstain)
-            if val is not None and str(val).casefold() in query.casefold():
+            if val is not None and (numeric_grounded or str(val).casefold() in query.casefold()):
                 out[p] = val
         return out
 

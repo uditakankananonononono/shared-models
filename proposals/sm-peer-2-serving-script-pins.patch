@@ -1,8 +1,8 @@
 diff --git a/scripts/inkling/serve_llamacpp.sh b/scripts/inkling/serve_llamacpp.sh
-index 5b1d34a..cce0f1f 100755
+index 5b1d34a..72a3940 100755
 --- a/scripts/inkling/serve_llamacpp.sh
 +++ b/scripts/inkling/serve_llamacpp.sh
-@@ -27,12 +27,61 @@ if [ "$(git rev-parse HEAD)" != "$PIN_SHA" ]; then
+@@ -27,12 +27,65 @@ if [ "$(git rev-parse HEAD)" != "$PIN_SHA" ]; then
    rm -rf "$DIR/build"   # any existing build is of a different source; rebuild from the pin
  fi
  [ "$(git rev-parse HEAD)" = "$PIN_SHA" ] || die "HEAD is not $PIN_SHA after checkout"
@@ -26,7 +26,11 @@ index 5b1d34a..cce0f1f 100755
 +# Weights pin. llama-server -hf has no revision syntax (":QUANT" is a quant selector); it resolves the repo's
 +# "main" branch. See docs/inkling-input-pins-evidence.md. Two modes:
 +#  - INKLING_GGUF_DIR set: serve local shards from that directory, each verified against the pinned sha256 below.
-+#  - otherwise: refuse to start unless main still points at the pinned commit, then use -hf (a narrow race remains).
++#  - otherwise: refuse to start unless remote main still points at the pinned commit, then use -hf.
++#    LIMIT (not a pin of what is served): the preflight only checks REMOTE main. llama.cpp 68cd3f6c falls back to
++#    cached files when its own online lookup returns empty (common/download.cpp:699-704) and may then pick the cached
++#    "main" ref or another cached ref (common/hf-cache.cpp:353-380). The preflight never validates that later-selected
++#    snapshot, so this mode is weaker than a race on main; use INKLING_GGUF_DIR for a real pin. UNPROVEN, not executed.
 +MODEL_REPO="unsloth/Inkling-Small-GGUF"
 +MODEL_REV="1a19ef82883cb7b9c581b93c30ea252dabbf658d"
 +SHARDS=()

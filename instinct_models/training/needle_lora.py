@@ -38,6 +38,49 @@ class NeedleLoRAJob:
     val_split: float = 0.1
 
 
+class RegistryTornError(ValueError):
+    """The registry's final line has no trailing newline and is not valid JSON (an interrupted append)."""
+
+
+def read_registry(out_dir) -> list[dict]:
+    """Parse ``<out_dir>/registry.jsonl`` into its records, oldest first. A missing file is an empty registry.
+
+    Lines split on LF only (U+2028 and friends inside a JSON string are not boundaries); one UTF-8 BOM at the start is
+    ignored; blank lines are skipped. A corrupt line that is followed by more data raises ValueError naming the file and
+    1-based line number. A final line with no LF that does not parse raises RegistryTornError (a torn append: it is
+    reported, never silently treated as a record); a final line with no LF that parses is returned as a record.
+    Each record must be a JSON object. Nothing is verified about the files a record points at: compare
+    ``tuned_sha256`` with the file on disk yourself.
+    """
+    reg = Path(out_dir) / "registry.jsonl"
+    if reg.is_symlink() or (reg.exists() and not reg.is_file()):
+        raise ValueError("training registry must be a regular non-symlink file")
+    if not reg.exists():
+        return []
+    try:
+        text = reg.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{reg}: registry is not valid UTF-8") from exc
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    lines = text.split("\n")
+    records: list[dict] = []
+    for n, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        last = n == len(lines)  # no LF after it: the file ended mid-line or without a final newline
+        try:
+            rec = json.loads(line)
+            if not isinstance(rec, dict):
+                raise ValueError("record is not a JSON object")
+        except (ValueError, RecursionError) as exc:
+            if last:
+                raise RegistryTornError(f"{reg}: line {n} is torn (no trailing newline, not valid JSON)") from exc
+            raise ValueError(f"{reg}: line {n} is not a valid registry record: {exc}") from exc
+        records.append(rec)
+    return records
+
+
 def _sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
@@ -92,9 +135,11 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
               "tuned_weights": str(tuned), "tuned_sha256": _sha(tuned), "epochs": job.epochs,
               "trained_at": datetime.now(timezone.utc).isoformat(), "logs": logs}
     if reg.is_symlink():raise ValueError("training registry symlink refused")
-    fd = os.open(reg, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0), 0o600)
-    with os.fdopen(fd, "a") as f:
+    fd = os.open(reg, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0), 0o600)
+    with os.fdopen(fd, "a+", encoding="utf-8") as f:
         if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
             raise ValueError("training registry must be regular")
-        f.write(json.dumps(record) + "\n")
+        size = os.fstat(f.fileno()).st_size
+        lead = "\n" if size and os.pread(f.fileno(), 1, size - 1) != b"\n" else ""  # heal a missing final LF
+        f.write(lead + json.dumps(record) + "\n")
     return record

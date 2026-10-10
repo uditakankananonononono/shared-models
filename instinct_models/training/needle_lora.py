@@ -39,7 +39,7 @@ class NeedleLoRAJob:
 
 
 class RegistryTornError(ValueError):
-    """The registry's final line has no trailing newline and is not valid JSON (an interrupted append)."""
+    """A final no-LF registry line with malformed or incomplete JSON: consistent with an interrupted append, cause not proven."""
 
 
 def _refuse(fd: int, reg: Path):

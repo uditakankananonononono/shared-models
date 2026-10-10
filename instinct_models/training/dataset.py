@@ -94,7 +94,25 @@ def _check_output_target(path: Path) -> None:
         raise ValueError(f"output path exists and is not a regular file: {path.name}")
 
 
-def _write_atomic(path: Path, text: str) -> None:
+def _fsync_dir(directory: Path) -> None:
+    """fsync a directory, ordering a rename into it before any later crash (POSIX only)."""
+    fd = os.open(str(directory), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _check_no_symlink_ancestors(directory: Path) -> None:
+    """Refuse when the output directory or ANY of its ancestors is a symlink (lexical check; see docs/dataset-output-durability-contract.md)."""
+    for p in (directory, *directory.parents):
+        if p.is_symlink():
+            if p == directory:
+                raise ValueError("refusing to write into a symlinked output directory")
+            raise ValueError(f"refusing to write through a symlinked ancestor directory: {p}")
+
+
+def _write_atomic(path: Path, data: str | bytes) -> None:
     """Write via a fresh temp file in the same directory, then rename over the target (never a partial file at the target).
 
     Guarantee: a directory at the temp name, or an OSError while clearing the temp name, is a name-only ValueError.
@@ -110,13 +128,21 @@ def _write_atomic(path: Path, text: str) -> None:
         tmp.unlink(missing_ok=True)  # stale or planted file/symlink at our own temp name: remove the name (never follows a link), then create exclusively
     except OSError:
         raise ValueError(f"cannot clear output temp path: {tmp.name}") from None
+    payload = data.encode("utf-8") if isinstance(data, str) else data  # raw bytes pass through (prior content need not be UTF-8)
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o666)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-            f.write(text)
+        with os.fdopen(fd, "wb") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())  # contents written out before the rename
         os.replace(tmp, path)
+        if os.name == "posix":
+            _fsync_dir(path.parent)
     except BaseException:
-        tmp.unlink(missing_ok=True)
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass  # cleanup must never mask the primary write error
         raise
 
 
@@ -158,8 +184,7 @@ def build_needle_jsonl(dataset: DomainDataset, out_path: str | Path, *, min_off_
     ratio = off_topic / len(kept)
     out = Path(out_path)
     manifest_path = Path(str(out) + ".manifest.json")
-    if out.parent.is_symlink():
-        raise ValueError("refusing to write into a symlinked output directory")
+    _check_no_symlink_ancestors(out.parent)
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
     except (NotADirectoryError, FileExistsError) as exc:
@@ -167,11 +192,40 @@ def build_needle_jsonl(dataset: DomainDataset, out_path: str | Path, *, min_off_
     _check_output_target(out)  # both targets are checked before anything is written
     _check_output_target(manifest_path)
     text = "".join(json.dumps(r, sort_keys=True, ensure_ascii=False) + "\n" for r in kept)
-    _write_atomic(out, text)
     manifest = {"product": dataset.product, "rows": len(kept), "dropped": len(dropped), "dropped_detail": dropped[:200],
                 "off_topic_ratio": round(ratio, 3), "sha256": hashlib.sha256(text.encode()).hexdigest(),
                 "train_locally_only": private, "path": str(out),
                 "warnings": ([f"off-topic ratio {ratio:.2f} is below {min_off_topic_ratio}; the tuned model may call tools on everything"]
                              if ratio < min_off_topic_ratio else [])}
-    _write_atomic(manifest_path, json.dumps(manifest, indent=2))
+    old_data = out.read_bytes() if out.exists() else None  # raw bytes: prior content need not be UTF-8
+    old_manifest = manifest_path.read_bytes() if manifest_path.exists() else None
+    try:
+        _write_atomic(out, text)
+        _write_atomic(manifest_path, json.dumps(manifest, indent=2))
+    except BaseException:
+        # Phase-aware rollback covering ALL phases after either file may change (including
+        # a directory-fsync failure after EITHER rename). Attempt both restorations
+        # independently; a failed rollback leaves mixed state (documented) and never
+        # masks the original error.
+        if old_data is None:
+            try:
+                out.unlink(missing_ok=True)  # first build: leave no data without its manifest
+            except Exception:
+                pass
+        else:
+            try:
+                _write_atomic(out, old_data)  # restore the previous data bytes verbatim
+            except Exception:
+                pass
+        if old_manifest is None:
+            try:
+                manifest_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+        else:
+            try:
+                _write_atomic(manifest_path, old_manifest)  # restore the previous manifest bytes verbatim
+            except Exception:
+                pass
+        raise
     return manifest

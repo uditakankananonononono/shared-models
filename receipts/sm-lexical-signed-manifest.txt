@@ -1,0 +1,15 @@
+unit: SM-lexical-signed repin 90b7
+base: 90b7da6850683cfa990173184b57a5cfb6a509ff
+branch: prep/sm-lexical-signed-90b7
+status: PREP-NORUN, proposal UNAPPLIED
+test_first_commit: e53bb050af583971fbba8e633a163f1377290db7
+historical_package_commit: 5db29e19195dd57c42e6ad5b9c4041726f8333b3
+overlap: no base-to-base content changes on product/package paths; additive paths unoccupied
+checks_run: git source/path overlap, text inspection, git diff --check, package/hash commands
+not_run: tests, mutants, imports, compile, runtime, proposal apply
+no_inherited_results: true
+product target unchanged: instinct_models/lexical.py
+per_file_sha256 (manifest excludes itself):
+b0dee955e002d03a5b34d640c15f801656ecc62de3907cb1290c4a76e9063a31  tests/test_lexical_signed_numerics.py
+e603515f11e037e6d7b42c00b5e58faf80b9f37f2fe29ecb1bd2d4e8c4332c67  proposals/sm-lexical-signed-UNAPPLIED.patch
+eda13d2ef84b6a3edf0df5a55e1d386d7990e2ce8ee5a14f232bedded03fb05e  receipts/sm-lexical-signed.md

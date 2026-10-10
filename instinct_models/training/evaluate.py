@@ -11,7 +11,7 @@ from ..lexical import LexicalToolModel
 def _load_rows(jsonl_path) -> list[dict]:
     """Read and validate rows; any problem is a ValueError naming the file line."""
     rows = []
-    for n, line in enumerate(Path(jsonl_path).read_text(encoding="utf-8").splitlines(), 1):
+    for n, line in enumerate(Path(jsonl_path).read_text(encoding="utf-8").split("\n"), 1):  # NOT splitlines(): U+0085, U+2028, U+2029 can sit raw inside a valid JSON string
         if not line.strip():
             continue
         try:

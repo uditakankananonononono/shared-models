@@ -67,10 +67,10 @@ class Router:
             if isinstance(p, NeedleLocal) and not task.tools:
                 out.attempts.append(RouteAttempt(p.name, "skipped", "not a tool-calling task"))
                 continue
-            if task.private and not p.allows_private():
-                out.attempts.append(RouteAttempt(p.name, "skipped", "private task requires a trusted local endpoint"))
-                continue
             try:
+                if task.private and not p.allows_private():
+                    out.attempts.append(RouteAttempt(p.name, "skipped", "private task requires a trusted local endpoint"))
+                    continue
                 if not p.available():
                     out.attempts.append(RouteAttempt(p.name, "unavailable"))
                     continue

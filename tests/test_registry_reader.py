@@ -1,9 +1,12 @@
 """SM-N5: registry reader + append-heal. Real temp files; no training."""
 import json
+import os
+import signal
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from instinct_models.training.needle_lora import NeedleLoRAJob, RegistryTornError, read_registry, train_needle_lora
 
@@ -88,10 +91,69 @@ class RegistryReader(unittest.TestCase):
         b = train(self.out, self.data)
         self.assertEqual(self.reg.read_bytes(), (json.dumps(a) + "\n" + json.dumps(b) + "\n").encode())
 
-    def test_heal_on_bom_only_file_and_empty_file(self):
+    def test_heal_on_empty_file(self):
         self.reg.write_bytes(b"")
-        train(self.out, self.data)
+        new = train(self.out, self.data)
         self.assertFalse(self.reg.read_bytes().startswith(b"\n"))
+        self.assertEqual(read_registry(self.out), [new])
+
+    def test_heal_on_bom_only_file(self):
+        self.reg.write_bytes(b"\xef\xbb\xbf")  # BOM, no content, no LF
+        new = train(self.out, self.data)
+        self.assertEqual(self.reg.read_bytes(), b"\xef\xbb\xbf\n" + (json.dumps(new) + "\n").encode())
+        self.assertEqual(read_registry(self.out), [new])
+
+    def test_valid_json_wrong_shape_on_final_unterminated_line_is_not_torn(self):
+        for body in ('{"a":1}\n[1]', '{"a":1}\n"x"', '{"a":1}\n3'):
+            self.reg.write_text(body)
+            with self.assertRaises(ValueError) as cm:
+                read_registry(self.out)
+            self.assertNotIsInstance(cm.exception, RegistryTornError, body)
+            self.assertIn("line 2", str(cm.exception))
+
+    def test_late_symlink_swap_is_not_followed(self):
+        outside = self.d / "outside"
+        outside.write_text('{"secret":1}\n')
+        self.reg.write_text('{"a":1}\n')
+        real_open = os.open
+
+        def swap_then_open(path, *a, **k):
+            if str(path) == str(self.reg):  # the swap lands after any path-based pre-check
+                self.reg.unlink()
+                self.reg.symlink_to(outside)
+            return real_open(path, *a, **k)
+        with mock.patch("instinct_models.training.needle_lora.os.open", swap_then_open):
+            with self.assertRaisesRegex(ValueError, "registry"):
+                read_registry(self.out)
+
+    def test_late_fifo_swap_refuses_without_hanging(self):
+        if not hasattr(os, "mkfifo") or not hasattr(signal, "alarm"):
+            self.skipTest("POSIX FIFO only")
+        self.reg.write_text('{"a":1}\n')
+        real_open = os.open
+
+        def swap_then_open(path, *a, **k):
+            if str(path) == str(self.reg):
+                self.reg.unlink()
+                os.mkfifo(self.reg)
+            return real_open(path, *a, **k)
+
+        def boom(*_):
+            raise AssertionError("reader blocked on a FIFO")
+        old = signal.signal(signal.SIGALRM, boom)
+        signal.alarm(3)
+        try:
+            with mock.patch("instinct_models.training.needle_lora.os.open", swap_then_open):
+                with self.assertRaisesRegex(ValueError, "regular"):
+                    read_registry(self.out)
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old)
+
+    def test_directory_registry_refused(self):
+        self.reg.mkdir()
+        with self.assertRaises(ValueError):
+            read_registry(self.out)
 
 
 if __name__ == "__main__":

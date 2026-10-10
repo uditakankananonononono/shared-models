@@ -79,13 +79,13 @@ Which mmproj file llama.cpp would pick is decided by `find_best_mmproj` (downloa
 - Meaning (branch, tag or commit id; default "default version"): vllm/config/model.py:206-216.
 - Tokenizer revision defaults to the model revision: vllm/config/model.py:564-565.
 - Revision resolved once to a commit: vllm/config/model.py:592-596; `resolve_revision` is best effort and returns the revision unchanged if it cannot resolve: vllm/transformers_utils/repo_utils.py:52-74 (a 40-hex commit is already a commit; ASSUMED unchanged).
-- `trust_remote_code` code revision is passed separately, `code_revision` (None unless set): vllm/config/model.py:635-639. Because the script uses `--trust-remote-code`, `--code-revision` must be pinned too, or code comes from the repo's default branch (READ: "If unspecified, will use the default version", model.py:209-212).
+- `trust_remote_code` code revision is passed separately, `code_revision` (None unless set): vllm/config/model.py:635-639. The script uses `--trust-remote-code`, so the patch also passes `--code-revision`. The help text says only "If unspecified, will use the default version" (model.py:209-212). That is NOT a traced guarantee that this model's code would come from `main`; I did not trace how `get_config` uses `code_revision` for this model (ASSUMED unneeded to pin, kept pinned as a precaution).
 ### llama.cpp 68cd3f6cb06b1e425ea7221af03a93099aa6ab84 (https://raw.githubusercontent.com/ggml-org/llama.cpp/68cd3f6cb06b1e425ea7221af03a93099aa6ab84/<path>)
 - `-hf/--hf-repo` help: "<user>/<model>[:quant]"; mmproj also downloaded unless `--no-mmproj`: common/arg.cpp:3073-3081. `-hff/--hf-file` overrides the quant: arg.cpp:3083-3088.
 - The text after ':' is only a quant tag: common/download.cpp:67-75 (`tag = parts.back()`), used in `find_best_model(all, tag)` at download.cpp:732.
 - **`-hf` has no revision syntax (READ: no revision field in `common_download_split_repo_tag`, download.cpp:67-75, or in the `-hf` option, arg.cpp:3073-3081).** It resolves the repo's `main` branch: refs API `api/models/<repo>/refs` at common/hf-cache.cpp:210, branch name "main" selected at hf-cache.cpp:243, commit used at :280, tree listing at :293, file URLs `.../resolve/<commit>/...` at :331.
 - Offline cache pick: `get_cached_ref` prefers refs file named "main", else any other: hf-cache.cpp:360-377; `--offline` flag: arg.cpp:3952-3955; offline use at download.cpp:699-704.
-- Alternatives (proposed in the patch, nothing downloaded here): (a) INKLING_GGUF_DIR with local shards verified by sha256 against section 2 and `-m <first shard>`; (b) preflight that refuses to start unless `main` equals the pinned commit, then `-hf`. (b) leaves a race between the check and llama-server's own refs lookup. `-m` with first shard of a split GGUF is ASSUMED to load the remaining shards (not read in this unit).
+- Alternatives (proposed in the patch, nothing downloaded here): (a) INKLING_GGUF_DIR with local shards verified by sha256 against section 2 and `-m <first shard>`; (b) preflight that refuses to start unless `main` equals the pinned commit, then `-hf`. (b) is weaker than a pin: it leaves a race between the check and llama-server's own refs lookup, and it never validates a cached snapshot that llama.cpp may select (see section 5). `-m` with first shard of a split GGUF is ASSUMED to load the remaining shards (not read in this unit).
 
 ## 4. Dirty-tree / stale-build check (proposed)
 - Existing script treats `HEAD==PIN_SHA` as clean (READ in base serve_llamacpp.sh); the proposed patch adds `git status --porcelain -- . ':(exclude)build'` and dies on any output (no auto-clean).
@@ -95,4 +95,15 @@ Which mmproj file llama.cpp would pick is decided by `find_best_mmproj` (downloa
 ## 5. UNPROVEN
 - End-to-end serving, Inkling compatibility of v0.31.0 or of llama.cpp 68cd3f6 with these exact weights; that vLLM accepts `--code-revision` together with Inkling's tokenizer mode; that llama-server loads `-m <first shard>`; the proposed scripts have never been executed (syntax-only `bash -n`).
 - The PR 25731 head is mutable; the HF repos can be force-pushed; the registry/Hub values were read once.
-- Spec URL for the repo: `https://github.com/uditakankananononono/shared-models` does not resolve (git asked for credentials); `https://github.com/uditakankananonononono/shared-models` (one more "no") resolves and its HEAD is the stated base. I used the latter.
+- Spec repo URL `https://github.com/uditakankananononono/shared-models`: unauthenticated `git ls-remote` was refused with a credentials prompt ("could not read Username"). That is NOT proof the repository does not exist (GitHub also prompts for unknown or private repos). The URL with one more "no" (`.../uditakankananonononono/shared-models`) answered unauthenticated, and its HEAD is the stated base; I used it.
+- HF-mode cache fallback (peer-required): in pinned llama.cpp, `download.cpp:699-704` falls back to cached files when the online lookup returns empty, and `hf-cache.cpp:353-380` may then choose the cached `main` ref or any other cached ref. The proposed remote-`main` preflight never validates the snapshot selected that way, so HF mode is weaker than "a small race on main". Only INKLING_GGUF_DIR (sha256-verified local shards) pins what is served. Not executed.
+
+## 6. Builder operations ledger (what I, the builder, actually ran)
+| Operation | Where | Result | Note |
+|---|---|---|---|
+| HTTP GET to HF model API `?blobs=true`, `/refs`, GitHub/raw/Docker Hub/registry metadata | network, read only | values in sections 1-3 | no weights, GGUFs or model files downloaded |
+| Scratch `git apply --check` of the proposed patch | scratch copy of base outside the branch | exit 0 | patch is NOT applied in the branch |
+| `bash -n` on both patched scripts | scratch copy outside the branch | exit 0 | syntax only; scripts never executed |
+| `ast.parse` of tests/test_inkling_input_pins.py | branch file | OK | parse only |
+| Tests | authored, NOT executed by me (the peer reports its own run) | n/a | pytest/unittest never run by the builder |
+| git commit, format-patch, bundle create/verify, sha256sum | local | exit 0 | packaging only; no push |

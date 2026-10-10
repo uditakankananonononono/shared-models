@@ -38,7 +38,7 @@ def _get(url: str, api_key: str | None, timeout: float) -> dict:
         raise ValueError("refusing to send an API key over plain http to a non-loopback host")
     if api_key:
         h["Authorization"] = f"Bearer {api_key}"
-    opener = urllib.request.build_opener(_NoRedirect())
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
     with opener.open(urllib.request.Request(url, headers=h), timeout=timeout) as r:
         return json.loads(r.read().decode())
 

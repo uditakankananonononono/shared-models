@@ -90,8 +90,9 @@ class OutputGuard(unittest.TestCase):
         with mock.patch.object(Path, "unlink", side_effect=PermissionError(13, "secret detail")):
             with self.assertRaises(ValueError) as cm:
                 self.build()
-        self.assertNotIn("secret", str(cm.exception))
-        self.assertNotIn("13", str(cm.exception))
+        self.assertEqual(str(cm.exception), f"cannot clear output temp path: {self.temp_name().name}")  # exact name-only text (never a numeric substring: the pid in the name may contain digits)
+        self.assertNotIn("Errno", str(cm.exception))
+        self.assertNotIn("secret detail", str(cm.exception))
 
     def test_valid_write_is_byte_identical_to_the_pre_change_output(self):
         self.build()

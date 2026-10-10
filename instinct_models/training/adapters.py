@@ -16,6 +16,13 @@ from .dataset import ExampleRow
 
 
 class JsonlConfirmationLog:
+    """Read UTF-8 JSONL while recording bad rows without their private contents.
+
+    Decode failures are file errors, not row errors. Read the entire file before
+    yielding so a later bad byte cannot leave a partially consumed dataset.
+    Product tags remain untouched for the downstream product-isolation filter.
+    """
+
     def __init__(self, product: str, path: str | Path):
         if product not in ("atlas", "meemee", "sugarcode"):
             raise ValueError("product must be atlas, meemee or sugarcode")
@@ -25,20 +32,50 @@ class JsonlConfirmationLog:
 
     def rows(self) -> Iterable[ExampleRow]:
         self.skipped = []
-        for n, line in enumerate(self.path.read_text().splitlines(), 1):
-            ref = f"{self.path.name}:{n}"
+        try:
+            text = self.path.read_text(encoding="utf-8", errors="strict")
+        except UnicodeDecodeError:
+            # Do not expose offending bytes, log text, or full paths.
+            raise ValueError("confirmation log is not valid UTF-8") from None
+
+        for number, line in enumerate(text.splitlines(), 1):
+            ref = f"{self.path.name}:{number}"
             if not line.strip():
                 continue
             try:
-                rec = json.loads(line)
-                if not isinstance(rec, dict):
+                record = json.loads(line)
+                if not isinstance(record, dict):
                     raise ValueError("line is not an object")
-                call = rec.get("call")
-                answers = [] if call is None else [{"name": call["name"], "arguments": call.get("arguments") or {}}]
-                row = ExampleRow(query=rec["query"], tools=rec["tools"], answers=answers,
-                                 confirmed=rec.get("owner_decision") == "confirmed",
-                                 source_ref=str(rec.get("id") or ref), private=bool(rec.get("private", True)),
-                                 product=rec.get("product", self.product))
+                tools = record["tools"]
+                if not isinstance(tools, list):
+                    self.skipped.append({"source_ref": ref, "reason": "tools must be a list"})
+                    continue
+                call = record.get("call")
+                if call is None:
+                    answers = []
+                else:
+                    if not isinstance(call, dict):
+                        self.skipped.append({"source_ref": ref, "reason": "call must be an object or null"})
+                        continue
+                    arguments = call.get("arguments", {})
+                    if arguments is None:
+                        arguments = {}  # explicit null means no arguments, as the legacy reader and the dataset builder treat it
+                    if not isinstance(arguments, dict):
+                        self.skipped.append({"source_ref": ref, "reason": "arguments must be an object"})
+                        continue
+                    answers = [{"name": call["name"], "arguments": arguments}]
+                row = ExampleRow(
+                    query=record["query"],
+                    tools=tools,
+                    answers=answers,
+                    confirmed=record.get("owner_decision") == "confirmed",
+                    source_ref=str(record.get("id") or ref),
+                    private=bool(record.get("private", True)),
+                    product=record.get("product", self.product),
+                )
+            except RecursionError:
+                self.skipped.append({"source_ref": ref, "reason": "unreadable row: RecursionError"})
+                continue
             except (ValueError, KeyError, TypeError) as exc:
                 self.skipped.append({"source_ref": ref, "reason": f"unreadable row: {type(exc).__name__}"})
                 continue

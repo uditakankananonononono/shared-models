@@ -38,7 +38,7 @@ class JsonlConfirmationLog:
             # Do not expose offending bytes, log text, or full paths.
             raise ValueError("confirmation log is not valid UTF-8") from None
 
-        for number, line in enumerate(text.splitlines(), 1):
+        for number, line in enumerate(text.split("\n"), 1):  # NOT splitlines(): U+2028, U+0085, \x0b, \x0c, \x1c-\x1e can sit raw inside a valid JSON string
             ref = f"{self.path.name}:{number}"
             if not line.strip():
                 continue

@@ -45,7 +45,7 @@ Known limits (tested in `tests/test_lexical.py`):
 
 ## Config
 
-Set these environment variables: `INSTINCT_PRODUCT` (atlas | meemee | sugarcode), `INSTINCT_INKLING_LOCAL_URL`, `INSTINCT_INKLING_LOCAL_MODEL`, `INSTINCT_HF_MODEL`, `INSTINCT_ORNITH_URL`, `INSTINCT_ORNITH_MODEL` (use the tag you pulled), `INSTINCT_NEEDLE_WEIGHTS`, `INSTINCT_HERMES_URL`, `INSTINCT_HERMES_MODEL`, `INSTINCT_LEXICAL_TRAIN_JSONL`, `INSTINCT_ALLOW_HOSTED` (off by default; only `1`, `true`, `yes` or `on` enable it), `INSTINCT_JEV_API_KEY` (optional; falls back to `JEV_API_KEY`). `HF_TOKEN` and the Jev key are read from the environment and never stored. You can also pass a JSON or YAML file through `load_config(path=...)`.
+Set these environment variables: `INSTINCT_PRODUCT` (atlas | meemee | sugarcode), `INSTINCT_INKLING_LOCAL_URL`, `INSTINCT_INKLING_LOCAL_MODEL`, `INSTINCT_HF_MODEL`, `INSTINCT_ORNITH_URL`, `INSTINCT_ORNITH_MODEL` (use the tag you pulled), `INSTINCT_NEEDLE_WEIGHTS`, `INSTINCT_HERMES_URL`, `INSTINCT_HERMES_MODEL`, `INSTINCT_LEXICAL_TRAIN_JSONL`, `INSTINCT_ALLOW_HOSTED` (off by default; only `1`, `true`, `yes` or `on` enable it), `INSTINCT_JEV_API_KEY` (optional; falls back to `JEV_API_KEY`). `HF_TOKEN` is read from the environment. The Jev key is read from the environment or from the optional config file. Keys are held in runtime memory (in the config object and the provider objects), and `ProductConfig`'s `repr`/`str` leaves out `jev_api_key` and `extra` (unknown config-file keys). That exclusion is only the generated `repr`: `dataclasses.asdict` and `dataclasses.replace` still carry the values, and no other protection is claimed. You can also pass a JSON or YAML file through `load_config(path=...)`.
 
 ## Jev (opt-in, paid; no free API route)
 

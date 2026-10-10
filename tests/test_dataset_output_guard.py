@@ -43,6 +43,16 @@ class OutputGuard(unittest.TestCase):
             self.build()
         self.assertFalse(self.victim.exists())
 
+    def test_stale_or_planted_temp_name_does_not_block_or_get_followed(self):
+        (self.d / "o").mkdir()
+        tmp = self.d / "o" / f".x.jsonl.{os.getpid()}.tmp"
+        tmp.write_text("stale")
+        self.build()  # stale same-pid temp is removed, not a FileExistsError
+        os.symlink(self.victim, tmp)
+        self.build()  # planted symlink at the temp name is removed, never written through
+        self.assertFalse(self.victim.exists())
+        self.assertEqual([p.name for p in (self.d / "o").iterdir() if p.name.endswith(".tmp")], [])
+
     def test_symlinked_manifest_is_refused_before_any_write(self):
         (self.d / "o").mkdir()
         os.symlink(self.victim, self.d / "o/x.jsonl.manifest.json")

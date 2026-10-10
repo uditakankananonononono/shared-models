@@ -42,23 +42,35 @@ class RegistryTornError(ValueError):
     """The registry's final line has no trailing newline and is not valid JSON (an interrupted append)."""
 
 
+def _refuse(fd: int, reg: Path):
+    os.close(fd)
+    raise ValueError(f"{reg}: training registry must be a regular non-symlink file")
+
+
 def read_registry(out_dir) -> list[dict]:
     """Parse ``<out_dir>/registry.jsonl`` into its records, oldest first. A missing file is an empty registry.
 
     Lines split on LF only (U+2028 and friends inside a JSON string are not boundaries); one UTF-8 BOM at the start is
     ignored; blank lines are skipped. A corrupt line that is followed by more data raises ValueError naming the file and
-    1-based line number. A final line with no LF that does not parse raises RegistryTornError (a torn append: it is
-    reported, never silently treated as a record); a final line with no LF that parses is returned as a record.
+    1-based line number. A final line with no LF whose JSON is incomplete or malformed raises RegistryTornError (consistent with an
+    interrupted append, though a missing LF alone does not prove a crash; it is reported, never treated as a record); a final line with no LF that parses is returned as a record.
     Each record must be a JSON object. Nothing is verified about the files a record points at: compare
     ``tuned_sha256`` with the file on disk yourself.
     """
     reg = Path(out_dir) / "registry.jsonl"
-    if reg.is_symlink() or (reg.exists() and not reg.is_file()):
-        raise ValueError("training registry must be a regular non-symlink file")
-    if not reg.exists():
-        return []
+    # Same discipline as the writer: open the leaf without following a symlink or blocking on a FIFO, then check the
+    # OPEN descriptor and read from it, so a swap between a check and the read cannot redirect us to another file.
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
-        text = reg.read_bytes().decode("utf-8")
+        fd = os.open(reg, flags)
+    except FileNotFoundError:
+        return []
+    except OSError as exc:  # ELOOP for a symlink, plus permission and other errors
+        raise ValueError(f"{reg}: training registry must be a readable regular non-symlink file ({exc.strerror})") from exc
+    with os.fdopen(fd, "rb", closefd=True) if stat.S_ISREG(os.fstat(fd).st_mode) else _refuse(fd, reg) as f:
+        raw = f.read()
+    try:
+        text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ValueError(f"{reg}: registry is not valid UTF-8") from exc
     if text.startswith("\ufeff"):
@@ -68,15 +80,17 @@ def read_registry(out_dir) -> list[dict]:
     for n, line in enumerate(lines, 1):
         if not line.strip():
             continue
-        last = n == len(lines)  # no LF after it: the file ended mid-line or without a final newline
+        last = n == len(lines)  # no LF after it
         try:
             rec = json.loads(line)
-            if not isinstance(rec, dict):
-                raise ValueError("record is not a JSON object")
-        except (ValueError, RecursionError) as exc:
+        except json.JSONDecodeError as exc:
             if last:
-                raise RegistryTornError(f"{reg}: line {n} is torn (no trailing newline, not valid JSON)") from exc
+                raise RegistryTornError(f"{reg}: line {n} has no trailing newline and is incomplete or malformed JSON") from exc
             raise ValueError(f"{reg}: line {n} is not a valid registry record: {exc}") from exc
+        except RecursionError as exc:
+            raise ValueError(f"{reg}: line {n} is not a valid registry record: nested too deeply") from exc
+        if not isinstance(rec, dict):  # valid JSON, wrong shape: an ordinary error, not a torn append
+            raise ValueError(f"{reg}: line {n} is not a valid registry record: not a JSON object")
         records.append(rec)
     return records
 

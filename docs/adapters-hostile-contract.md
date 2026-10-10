@@ -53,3 +53,21 @@ The tests were run by the integrator (see the commit and report). This handles r
 new maximum-depth policy for parseable input. Byte size, row count and execution
 time limits are outside this unit: the whole file is read into memory. NaN is accepted as a JSON value. No live/hosted calls, services, database,
 migrations, environment/credential inspection or pushes are part of this work.
+
+## Intake diagnostics (SM-N6)
+
+- UTF-16: a file that starts with a UTF-16 BOM (FF FE / FE FF), or whose first 64 bytes are NUL-interleaved ASCII, raises a
+  file-level ValueError telling the user to re-save as UTF-8 (PowerShell `>` writes UTF-16). UTF-16 is NOT decoded. The
+  message echoes no content. Detection is a heuristic: UTF-16 text that is not mostly ASCII in its first 64 bytes and has no
+  BOM is not recognized and falls to the generic "not valid UTF-8" error. A UTF-32 BOM also trips the UTF-16 message.
+- Size cap: constructor `max_bytes` (default 256 MiB). The size is read with fstat on the open descriptor and the read is
+  itself bounded to max_bytes+1, so a file that grows after the check is still refused. This is a guard against huge files,
+  not a streaming reader: decoding and splitting hold the text, so peak memory is a few times the cap.
+- Non-finite numbers: NaN, Infinity, -Infinity and out-of-range floats such as 1e999 anywhere in a row (arguments, query,
+  tools) skip that row with reason "non-finite number (NaN or Infinity)" and its line number. The builder already dropped
+  such rows later without saying which; the set of trained rows does not change.
+- Duplicate ids: rows are never dropped for a repeated `id`. `warnings` (reset on each pass) lists each repeat with its line
+  and the line of first sight. Missing, empty, boolean and non-scalar ids are not tracked. Two rows with the same id and
+  different content both stay; the downstream dedup is unchanged.
+- The reader no longer calls Path.read_text; it decodes bytes itself with utf-8-sig (strict). Symlinks are still followed
+  (unchanged); this is not a no-follow reader.

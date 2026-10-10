@@ -22,3 +22,11 @@ Planned commands, NOT RUN:
 
 Checks run: text inspection, git diff --check and packaging/receipt commands only.
 Tests, imports, compilation and candidate code: NOT RUN. No pushes or live state.
+
+## Applied at landing (integrator, 2026-10-10)
+
+The proposal in proposals/sm-router-trust-hook-UNAPPLIED.patch was APPLIED by the integrator as a separate commit on top of
+main 90b7da68 (the patch file is kept as the peer's authored artifact). Measured by the integrator: before application the new
+test file has 3 errors of 4 (suite 346 with 3 errors); after application the full suite is 346/346 OK. The existing router
+isolation and result-guard tests pass. Synthetic local proof only: no live provider, private transport or real policy hook
+was exercised.

@@ -187,8 +187,30 @@ class UsageValidationTests(unittest.TestCase):
         usage = {"prompt_tokens": 10, "completion_tokens": 0, "cost": 0.0025, "model": "jev-latest", "cached": True, "note": None}
         self.assertIs(validate_usage(usage), usage)
 
+    def test_nested_finite_usage_is_accepted(self):
+        u = {"tokens": {"in": 3, "out": 4}, "steps": [1, 2], "note": "ok"}
+        self.assertEqual(validate_usage(u), u)
+
+    def test_deep_or_cyclic_usage_and_state_are_provider_errors(self):
+        deep = cyc = []
+        for _ in range(5000):
+            deep = [deep]
+        cyc.append(cyc)
+        for bad in (deep, cyc):
+            with self.assertRaises(ProviderError):
+                validate_state(bad)
+            with self.assertRaises(ProviderError):
+                validate_usage({"u": bad})
+
+    def test_response_with_nan_or_infinity_is_rejected(self):
+        for raw in (b'{"answers": {"q": NaN}}', b'{"answers": {"q": Infinity}}', b'{"answers": {"q": 1e999}}'):
+            opener = FakeOpener(FakeResponse(raw))
+            with mock.patch("urllib.request.build_opener", return_value=opener):
+                with self.assertRaises(ProviderError):
+                    hardened_jev_transport("https://example.invalid/jev", {"state": "s"}, {}, 5)
+
     def test_invalid_usage_rejected(self):
-        for usage in ("text", [1], {"t": float("nan")}, {"t": float("inf")}, {"t": [1]}, {"t": {"n": 1}}, {1: 2}):
+        for usage in ("text", [1], {"t": float("nan")}, {"t": float("inf")}, {"t": [float("nan")]}, {"t": {"n": float("inf")}}, {1: 2}):
             with self.subTest(usage=usage):
                 with self.assertRaises(ProviderError):
                     validate_usage(usage)

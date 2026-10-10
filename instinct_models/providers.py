@@ -382,10 +382,12 @@ JEV_QUESTION_TYPES = ("noul", "choice", "score")
 
 
 class JevStatusError(ProviderError):
-    """The Jev API answered with a non-2xx status."""
+    """The Jev API answered with a non-2xx status. Carries the status code only: the response
+    body is never read or echoed (it can contain account or request detail). ``detail`` is
+    accepted for compatibility and ignored."""
 
-    def __init__(self, status: int, detail: str):
-        super().__init__(f"Jev API HTTP {status}: {detail[:300]}")
+    def __init__(self, status: int, detail: str = ""):
+        super().__init__(f"Jev API HTTP {status}")
         self.status = status
 
 
@@ -396,20 +398,31 @@ class _NoTransportRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _jev_opener() -> urllib.request.OpenerDirector:
+    """Opener with proxy environment explicitly disabled and redirects refused."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoTransportRedirect())
+
+
 def _jev_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
     """Default Jev transport. Same signature as http_json, but keeps the HTTP status so
-    the caller can retry 429/529 and explain 401/422 precisely."""
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+    the caller can retry 429/529 and explain 401/422 precisely. No proxy from the environment
+    (the bearer must not be routed through one), no redirects, finite JSON only, and errors
+    carry the status code only (no response body, no URL, no socket detail)."""
+    try:
+        payload = json.dumps(body, allow_nan=False).encode()
+    except (ValueError, TypeError):
+        raise ProviderError("jev request body is not finite JSON-serializable") from None
+    req = urllib.request.Request(url, data=payload, method="POST",
                                  headers={"Content-Type": "application/json", **headers})
     try:
-        with urllib.request.build_opener(_NoTransportRedirect()).open(req, timeout=timeout) as resp:
+        with _jev_opener().open(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
-    except (ValueError, RecursionError) as exc:
-        raise ProviderError("provider returned invalid JSON") from exc
     except urllib.error.HTTPError as exc:
-        raise JevStatusError(exc.code, exc.read()[:300].decode("utf-8", "replace")) from exc
-    except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
-        raise ProviderUnavailable(f"cannot reach {url}: {exc}") from exc
+        raise JevStatusError(exc.code) from None
+    except (ValueError, RecursionError, UnicodeError):
+        raise ProviderError("provider returned invalid JSON") from None
+    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
+        raise ProviderUnavailable("jev endpoint unreachable") from None
 
 
 def validate_questions(questions: dict) -> dict:
@@ -437,6 +450,90 @@ def validate_questions(questions: dict) -> dict:
         elif criteria is not None and not isinstance(criteria, dict):
             raise ProviderError(f"noul question {qid!r}: criteria, when present, must be an object with true/false keys")
     return questions
+
+
+def _check_finite_json(value, path: str) -> None:
+    """Reject anything that is not finite JSON: str/bool/None/finite number,
+    list, or dict with str keys."""
+    if value is None or isinstance(value, (bool, str)):
+        return
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ProviderError(f"{path}: non-finite number is not valid JSON")
+        return
+    if isinstance(value, list):
+        for i, item in enumerate(value):
+            _check_finite_json(item, f"{path}[{i}]")
+        return
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if not isinstance(k, str):
+                raise ProviderError(f"{path}: object keys must be text")
+            _check_finite_json(v, f"{path}.{k}")
+        return
+    raise ProviderError(f"{path}: {type(value).__name__} is not JSON-serializable")
+
+
+def validate_state(state) -> object:
+    """Validate a Jev evaluation state: text, or a finite JSON object/array/scalar.
+    Returns the state unchanged; raises ProviderError on the first violation."""
+    if isinstance(state, bytes):
+        raise ProviderError("state: bytes are not JSON text")
+    _check_finite_json(state, "state")
+    return state
+
+
+def validate_jev_questions_strict(questions: dict) -> dict:
+    """Strict-text validation on top of providers.validate_questions.
+
+    Every question id must be non-empty text, every instructions must be non-empty
+    text, and criteria (choice option->description, score levels, noul keys/values)
+    must be text where present. Then the documented shape checks run unchanged.
+    """
+    if not isinstance(questions, dict) or not questions:
+        raise ProviderError("questions must be a non-empty map of question id -> question")
+    for qid, q in questions.items():
+        if not isinstance(qid, str) or not qid.strip():
+            raise ProviderError(f"question id {qid!r}: ids must be non-empty text")
+        if not isinstance(q, dict):
+            raise ProviderError(f"question {qid!r} must be an object")
+        instructions = q.get("instructions")
+        if not isinstance(instructions, str) or not instructions.strip():
+            raise ProviderError(f"question {qid!r}: instructions must be non-empty text")
+        criteria = q.get("criteria")
+        qtype = q.get("type")
+        if qtype == "choice" and isinstance(criteria, dict):
+            for opt, desc in criteria.items():
+                if not isinstance(opt, str) or not isinstance(desc, str):
+                    raise ProviderError(f"choice question {qid!r}: options and descriptions must be text")
+        elif qtype == "score" and isinstance(criteria, list):
+            if any(not isinstance(level, str) for level in criteria):
+                raise ProviderError(f"score question {qid!r}: criteria levels must be text")
+        elif qtype == "noul" and isinstance(criteria, dict):
+            for k, v in criteria.items():
+                if not isinstance(k, str) or not isinstance(v, str):
+                    raise ProviderError(f"noul question {qid!r}: criteria keys and values must be text")
+    return validate_questions(questions)
+
+
+def validate_usage(usage) -> dict:
+    """Validate a Jev usage block: absent -> {}, otherwise a map of JSON scalars
+    with finite numbers. Raises ProviderError on any other shape."""
+    if usage is None:
+        return {}
+    if not isinstance(usage, dict):
+        raise ProviderError("jev usage must be an object")
+    for k, v in usage.items():
+        if not isinstance(k, str):
+            raise ProviderError("jev usage keys must be text")
+        if v is None or isinstance(v, (bool, str)):
+            continue
+        if isinstance(v, (int, float)):
+            if isinstance(v, float) and not math.isfinite(v):
+                raise ProviderError(f"jev usage {k!r}: non-finite number")
+            continue
+        raise ProviderError(f"jev usage {k!r}: must be a JSON scalar")
+    return usage
 
 
 class JevEval(Provider):
@@ -479,7 +576,8 @@ class JevEval(Provider):
         endpoint = JEV_GATEWAY_ENDPOINT if gateway else JEV_DIRECT_ENDPOINT
         key = self.gateway_api_key if gateway else self.api_key
         selected_model = model or ("typesafe-ai/jev" if gateway else self.model)
-        body = {"state": state, "model": selected_model, "questions": validate_questions(questions)}
+        validate_state(state)
+        body = {"state": state, "model": selected_model, "questions": validate_jev_questions_strict(questions)}
         headers = {"Authorization": f"Bearer {key}"}
         attempt = 0
         while True:
@@ -497,4 +595,4 @@ class JevEval(Provider):
         if not isinstance(data, dict) or not isinstance(data.get("answers"), dict):
             raise ProviderError("jev: unexpected response shape (no 'answers' object)")
         return {"model": data.get("model", selected_model), "answers": data["answers"],
-                "usage": data.get("usage") or {}, "raw": data}
+                "usage": validate_usage(data.get("usage")), "raw": data}

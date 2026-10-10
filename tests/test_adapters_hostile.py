@@ -52,10 +52,10 @@ class HostileAdapterTests(unittest.TestCase):
     def test_utf8_is_explicit_and_locale_independent(self):
         self.write_records(record(query="add task café", call={
             "name": "add_task", "arguments": {"title": "café"}}))
-        original = Path.read_text
-        with patch.object(Path, "read_text", autospec=True, side_effect=original) as read:
+        # SM-N6: the reader now reads bytes from an open fd and decodes explicitly, so it no longer calls Path.read_text.
+        # The property under test is unchanged: a non-UTF-8 locale default must not change the result.
+        with patch("locale.getpreferredencoding", return_value="ascii"), patch("_locale.getencoding", create=True, return_value="ascii"):
             rows = list(self.log.rows())
-        read.assert_called_once_with(self.path, encoding="utf-8-sig", errors="strict")
         self.assertEqual(rows[0].answers[0]["arguments"], {"title": "café"})
 
     BOM = b"\xef\xbb\xbf"

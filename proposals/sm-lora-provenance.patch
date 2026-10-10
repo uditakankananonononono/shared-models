@@ -1,0 +1,105 @@
+diff --git a/instinct_models/training/needle_lora.py b/instinct_models/training/needle_lora.py
+index fcbeca9..5fb081c 100644
+--- a/instinct_models/training/needle_lora.py
++++ b/instinct_models/training/needle_lora.py
+@@ -28,12 +28,15 @@ def _run(cmd: list[str], env: dict) -> subprocess.CompletedProcess:
+     return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=6 * 3600)
+ 
+ 
++DEFAULT_BASE_CHECKPOINT = "checkpoints/needle2.pkl"
++
++
+ @dataclass
+ class NeedleLoRAJob:
+     product: str
+     dataset_jsonl: str
+     out_dir: str
+-    base_checkpoint: str = "checkpoints/needle2.pkl"
++    base_checkpoint: str | None = None  # None = not provided: DEFAULT_BASE_CHECKPOINT is passed to the CLI and no hash is recorded
+     epochs: int = 10
+     val_split: float = 0.1
+ 
+@@ -99,6 +102,32 @@ def _sha(p: Path) -> str:
+     return hashlib.sha256(p.read_bytes()).hexdigest()
+ 
+ 
++def _base_checkpoint_sha(path_str: str | None) -> str | None:
++    """sha256 of the base checkpoint file; None ONLY when no path was provided.
++
++    A provided path (including the default string) that is missing, not a regular file, or cannot be inspected or read is a
++    name-only ValueError raised before any training starts. Symlinks are followed (the file that would be read is hashed)."""
++    if path_str is None:
++        return None
++    p = Path(path_str)
++    try:
++        st = p.stat()
++    except (FileNotFoundError, NotADirectoryError) as exc:
++        raise ValueError(f"base checkpoint not found: {p.name}") from exc
++    except (OSError, ValueError) as exc:
++        raise ValueError(f"base checkpoint cannot be inspected: {p.name}") from exc
++    if not stat.S_ISREG(st.st_mode):
++        raise ValueError(f"base checkpoint is not a regular file: {p.name}")
++    h = hashlib.sha256()
++    try:
++        with open(p, "rb") as f:
++            for chunk in iter(lambda: f.read(1 << 20), b""):
++                h.update(chunk)
++    except OSError as exc:
++        raise ValueError(f"base checkpoint is not readable: {p.name}") from exc
++    return h.hexdigest()
++
++
+ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "needle") -> dict:
+     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", job.product or ""):
+         raise ValueError(f"invalid product name {job.product!r}")
+@@ -106,7 +135,7 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
+         raise ValueError("epochs must be a positive integer")
+     if isinstance(job.val_split, bool) or not isinstance(job.val_split, (int, float)) or not 0 <= job.val_split < 1:
+         raise ValueError("val_split must be a number in [0, 1)")  # also rejects NaN
+-    if not isinstance(job.base_checkpoint, str) or not job.base_checkpoint or job.base_checkpoint.startswith("-"):
++    if job.base_checkpoint is not None and (not isinstance(job.base_checkpoint, str) or not job.base_checkpoint or job.base_checkpoint.startswith("-")):
+         raise ValueError("base_checkpoint must be a path, not an option")
+     data = Path(job.dataset_jsonl)
+     if not data.is_file():
+@@ -118,10 +147,12 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
+         raise ValueError("dataset manifest is not valid JSON; rebuild it") from exc
+     if not isinstance(ds_manifest, dict):
+         raise ValueError("dataset manifest must be a JSON object; rebuild it")
+-    if ds_manifest and ds_manifest.get("sha256") != _sha(data):
++    data_sha = _sha(data)  # hashed once, before training; this is the value recorded
++    if ds_manifest and ds_manifest.get("sha256") != data_sha:
+         raise ValueError("dataset changed since its manifest was written; rebuild it")
+     if runner is _run and shutil.which(cli) is None:
+         raise RuntimeError("needle CLI not found; pip install cactus-needle")
++    base_sha = _base_checkpoint_sha(job.base_checkpoint)  # before any side effect or training
+     out = Path(job.out_dir)
+     if out.is_symlink():
+         raise ValueError("training output directory must not be a symlink")
+@@ -134,7 +165,7 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
+         stale.unlink(missing_ok=True)
+     env = {k: v for k, v in os.environ.items() if k not in ("NEEDLE_HF_REPO", "OPENROUTER_API_KEY")}
+     steps = [[cli, "finetune", str(data), "--epochs", str(job.epochs), "--val-split", str(job.val_split), "--out", str(adapter)],
+-             [cli, "build", job.base_checkpoint, "--lora", str(adapter), "--out", str(tuned)]]
++             [cli, "build", job.base_checkpoint if job.base_checkpoint is not None else DEFAULT_BASE_CHECKPOINT, "--lora", str(adapter), "--out", str(tuned)]]
+     logs = []
+     for cmd in steps:
+         res = runner(cmd, env)
+@@ -144,9 +175,16 @@ def train_needle_lora(job: NeedleLoRAJob, runner: Runner = _run, cli: str = "nee
+             raise RuntimeError(f"{cmd[1]} failed (exit {res.returncode}): {(res.stderr or '')[-500:]}")
+     if not tuned.is_file():
+         raise RuntimeError("needle build reported success but no .cact was written")
+-    record = {"product": job.product, "dataset_sha256": _sha(data), "dataset_rows": ds_manifest.get("rows"),
++    try:
++        data_sha_after = _sha(data)
++    except OSError:
++        data_sha_after = None  # removed or unreadable after training counts as changed
++    if data_sha_after != data_sha:
++        raise ValueError("dataset changed during training; registry not written")
++    record = {"product": job.product, "dataset_sha256": data_sha, "dataset_rows": ds_manifest.get("rows"),
+               "train_locally_only": ds_manifest.get("train_locally_only", True), "adapter": str(adapter),
+-              "tuned_weights": str(tuned), "tuned_sha256": _sha(tuned), "epochs": job.epochs,
++              "tuned_weights": str(tuned), "tuned_sha256": _sha(tuned),
++              "base_checkpoint_sha256": base_sha, "epochs": job.epochs,
+               "trained_at": datetime.now(timezone.utc).isoformat(), "logs": logs}
+     if reg.is_symlink():raise ValueError("training registry symlink refused")
+     fd = os.open(reg, os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0), 0o600)

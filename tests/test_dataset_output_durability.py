@@ -1,30 +1,38 @@
 """Failure-injection tests for the dataset output durability contract.
 
-Unit SM-PEER-1 revision 4 (third peer audit incorporated; prep stack rebased
-onto base 50e4c1b = N1 temp-directory guard + N2 BOM fix landed). See
+Unit SM-PEER-1 revision 5 (fourth peer audit incorporated; prep stack on base
+50e4c1b = N1 temp-directory guard + N2 BOM fix landed). See
 docs/dataset-output-durability-contract.md.
 
 AUTHORED, NOT RUN (PREP-NORUN). These tests specify the FIXED behavior in the
 separate COMBINED proposal patch (against 50e4c1b, retaining N1's guard).
 
 Base-failure accounting:
-- The peer's EXECUTED result on revision 3 against base a215196a was 8 FAIL /
-  2 PASS (the peer's run, not this unit's - this unit executes nothing). The two
-  passes were vacuous probes: test_temp_cleanup_failure_never_masks_the_primary_write_error
+- OBSERVED (the peer's execution of revision 3 at a215196a; not this unit's
+  run - this unit executes nothing): 8 FAIL / 2 PASS. The two passes were
+  vacuous probes: test_temp_cleanup_failure_never_masks_the_primary_write_error
   (it raised on the DATA write with no prior output) and
   test_rollback_attempts_both_restorations_independently (the manifest never
   became NEW, so old-manifest equality was vacuous). Both are STRENGTHENED here
-  on the peer's direction: the cleanup probe calls _write_atomic DIRECTLY; the
+  on the peer's direction: the cleanup probe calls _write_atomic DIRECTLY and
+  patches Path.unlink ITSELF (monkeypatching os.unlink is bypassed by pathlib
+  on e.g. Python 3.10), asserting the denial hook FIRED; the
   independent-restoration probe makes the manifest NEW before the primary
   failure (POSIX directory-fsync phase), denies the FIRST (data) restore, and
   asserts the SECOND (manifest) restore actually runs and succeeds with the
-  original error preserved.
-- Against the current base 50e4c1b, by reading: 9 FAIL / 1 PASS -
-  test_planted_directory_at_temp_name_is_refused_with_value_error now PASSES
+  original error preserved. Whether the strengthened probes turn base red and a
+  cleanup-guard-removal mutant red is for the peer's fresh verification - this
+  unit does not state it as fact. The peer's direct base probe observation: a
+  SECONDARY PermissionError (1 denial hit) at base vs the combined proposal's
+  PRIMARY OSError.
+- By READING at the current base 50e4c1b: every test FAILS except
+  test_planted_directory_at_temp_name_is_refused_with_value_error, which PASSES
   because the consolidated N1 guard has landed (it raises ValueError
   "output temp path is a directory"); it stays as the regression spec for that
-  guard. Every other test still FAILS at 50e4c1b (no ancestor refusal, no
-  rollback, no fsync, unguarded except-cleanup).
+  guard. The strengthened cleanup probe reads red at 50e4c1b (N1 wraps only the
+  pre-open unlink; the except-cleanup is unguarded there). The strengthened
+  independent-restoration probe reads red at 50e4c1b (no rollback exists, so
+  the fsync injection never fires).
 
 Against earlier proposals of THIS unit, by reading (scope-corrected):
 - The ff52e52 (revision-1) proposal, counting only the R1/R2 tests that existed
@@ -35,11 +43,10 @@ Against earlier proposals of THIS unit, by reading (scope-corrected):
   not exist in that unit and are not counted against it.
 - The 66824c7 (revision-2) proposal additionally fails the three revision-3
   probes (cleanup masking, data-phase rollback, shared-try restorations).
-- The bada4a9 (revision-3) proposal fails the strengthened versions of the two
-  probes above (its cleanup guard is in _write_atomic but the probe now calls
-  _write_atomic directly - that one it PASSES; its restorations are independent
-  but the strengthened probe also requires the manifest to have become NEW,
-  which its rollback restores - see the per-test reading in the report).
+- The bada4a9 (revision-3) proposal PASSES both strengthened probes (its
+  cleanup guard lives in _write_atomic and its restorations are already
+  independent); the probes specify behavior the COMBINED proposal must
+  preserve.
 
 No network, no services; real filesystem only under tempfile.mkdtemp().
 """
@@ -181,25 +188,29 @@ class WriteCleanup(unittest.TestCase):
     def test_temp_cleanup_failure_never_masks_the_primary_write_error(self):
         # Mutation making this fail: deleting the inner `except OSError: pass`
         # guard around the cleanup `tmp.unlink(missing_ok=True)` in _write_atomic.
-        # Strengthened (peer audit): calls _write_atomic DIRECTLY, so the probe
-        # does not depend on build-level state and cannot pass vacuously.
+        # Strengthened (peer audit): calls _write_atomic DIRECTLY; patches
+        # Path.unlink ITSELF (monkeypatching os.unlink is bypassed by pathlib on
+        # e.g. Python 3.10); asserts the denial hook FIRED.
         d = Path(tempfile.mkdtemp())
-        orig_replace, orig_unlink = os.replace, os.unlink
+        orig_replace, orig_unlink = os.replace, Path.unlink
         os.replace = lambda a, b: (_ for _ in ()).throw(OSError("primary write failure"))
+        denials = []
 
-        def flaky_unlink(p, *a, **k):
-            if str(p).endswith(".tmp") and os.path.lexists(p):
+        def flaky_unlink(self_path, missing_ok=False):
+            if str(self_path).endswith(".tmp") and os.path.lexists(self_path):
+                denials.append(str(self_path))
                 raise PermissionError("cleanup denied")  # secondary error during cleanup
-            return orig_unlink(p, *a, **k)
+            return orig_unlink(self_path, missing_ok=missing_ok)
 
-        os.unlink = flaky_unlink
+        Path.unlink = flaky_unlink
         try:
             with self.assertRaises(OSError) as ctx:
                 _write_atomic(d / "x.jsonl", "payload")
         finally:
-            os.replace, os.unlink = orig_replace, orig_unlink
+            os.replace, Path.unlink = orig_replace, orig_unlink
         self.assertEqual(str(ctx.exception), "primary write failure")
         self.assertNotIsInstance(ctx.exception, PermissionError)
+        self.assertEqual(len(denials), 1)  # the cleanup-denial hook FIRED exactly once
 
 
 class DirFsyncPhaseFailures(unittest.TestCase):

@@ -1,10 +1,11 @@
 # Dataset output durability contract (SM-PEER-1, revision 3)
 
-Base: `a215196a3eca7dd4e571f853a9d5c91ee9984f05` (`instinct_models/training/dataset.py`, `build_needle_jsonl`).
-Revision 3 incorporates the second peer audit (of `66824c7d8a18dbb8b137798934a82df57288e193`); revision 4 incorporates the third (of `bada4a9cf3c2a75c76e5c5e1cf1368c3264e45f5`, prep layer only).
+Execution base: `50e4c1babb29ab6517cfbb904ef0808ec8524f7b` (N1 temp-directory guard + N2 BOM fix landed) - what the combined patch applies against.
+Historical behavior baseline: `a215196a3eca7dd4e571f853a9d5c91ee9984f05` - the source whose `build_needle_jsonl` the "Current (read)" statements describe; where landed N1 changes that behavior (case b), the case says so.
+Revisions: r2 incorporated the first peer audit (of `ff52e52fa58dfc3d26741a3a1ccd2b3f34c85666`); r3 the second (of `66824c7d8a18dbb8b137798934a82df57288e193`); r4 the third (of `bada4a9cf3c2a75c76e5c5e1cf1368c3264e45f5`, prep layer); r5 the fourth (of `b107ee0e4ecd08a0b991359e1645f03b027f26d5`, prep layer: probe-strengthening fixes).
 Companion tests: `tests/test_dataset_output_durability.py` (authored, not run).
-Product changes: proposed only, in the separate `dataset-output-durability-proposed.patch` (NOT applied; peer judgment and independent audit gate).
-Current-behavior statements below are READ from the base source, not executed.
+Product changes: proposed only, in the separate `dataset-output-durability-combined-proposal.patch` (against 50e4c1b; NOT applied; peer judgment and independent audit gate).
+Current-behavior statements below are READ from the named sources, not executed.
 
 ## (a) Ancestor directory of the output path is a symlink
 
@@ -15,7 +16,7 @@ Remaining limits: the refusal is LEXICAL-ONLY with a check/open race - an attack
 
 ## (b) Planted temp name `.<file>.<pid>.tmp` is a DIRECTORY
 
-Current (read): `_write_atomic` runs `tmp.unlink(missing_ok=True)`; on a planted directory that raises `IsADirectoryError` (or `PermissionError`) - an uncaught `OSError`, not the guard contract's `ValueError` - and the planted directory blocks the build.
+Current (historical baseline a215196a - FIXED by landed N1 at the execution base): `_write_atomic` runs `tmp.unlink(missing_ok=True)`; on a planted directory that raises `IsADirectoryError` (or `PermissionError`) - an uncaught `OSError`, not the guard contract's `ValueError` - and the planted directory blocks the build.
 Decision: FIX LANDED via the peer's SM-N1 consolidation (base `50e4c1babb29ab6517cfbb904ef0808ec8524f7b`): a directory at the temp name is a name-only `ValueError` and is never removed. This proposal deliberately carries NO guard of its own - exactly one S_ISDIR guard exists, N1's - and N1's docstring (guarantee + lstat limitation) is carried verbatim in the combined patch. `test_planted_directory_at_temp_name_is_refused_with_value_error` now PASSES at base and stays as the regression spec for the consolidated guard.
 Reader view after crash between writes: with the consolidated guard in place the build fails before any rename, so after any crash readers see only the previously committed data/manifest pair.
 Remaining limits (N1's own docstring, carried verbatim): the guard is a check-then-unlink sequence, so a swap between the check and the unlink still races; a permission-denied CLEARING unlink is wrapped into a name-only `ValueError` (on POSIX, unlink permission comes from the parent directory, not the file); only a `PermissionError` from the guard's own `lstat` remains unnormalized; a same-pid planted directory denies the run (availability, not integrity); other non-regular files (FIFO, socket) retain base unlink behavior.

@@ -53,6 +53,56 @@ class OutputGuard(unittest.TestCase):
         self.assertFalse(self.victim.exists())
         self.assertEqual([p.name for p in (self.d / "o").iterdir() if p.name.endswith(".tmp")], [])
 
+    def temp_name(self):
+        return self.d / "o" / f".x.jsonl.{os.getpid()}.tmp"
+
+    def test_planted_directory_at_temp_name_is_a_value_error_and_left_alone(self):
+        (self.d / "o").mkdir()
+        self.temp_name().mkdir()
+        with self.assertRaisesRegex(ValueError, "directory") as cm:
+            self.build()
+        self.assertNotIn(str(self.d), str(cm.exception))  # name only, no path or errno text
+        self.assertTrue(self.temp_name().is_dir())
+        self.assertEqual(sorted(p.name for p in (self.d / "o").iterdir()), [self.temp_name().name])  # no data, no manifest
+
+    def test_planted_directory_with_content_is_left_intact(self):
+        (self.d / "o").mkdir()
+        self.temp_name().mkdir()
+        (self.temp_name() / "keep").write_text("x")
+        with self.assertRaises(ValueError):
+            self.build()
+        self.assertEqual((self.temp_name() / "keep").read_text(), "x")
+
+    def test_symlink_to_a_directory_at_temp_name_is_unlinked_not_followed(self):
+        (self.d / "o").mkdir()
+        target = self.d / "elsewhere"
+        target.mkdir()
+        (target / "keep").write_text("x")
+        os.symlink(target, self.temp_name())
+        self.build()
+        self.assertEqual((target / "keep").read_text(), "x")
+        self.assertFalse(self.temp_name().exists() or self.temp_name().is_symlink())
+
+    def test_unlink_failure_at_temp_name_is_a_value_error_without_detail(self):
+        from unittest import mock
+        (self.d / "o").mkdir()
+        self.temp_name().write_text("stale")
+        with mock.patch.object(Path, "unlink", side_effect=PermissionError(13, "secret detail")):
+            with self.assertRaises(ValueError) as cm:
+                self.build()
+        self.assertNotIn("secret", str(cm.exception))
+        self.assertNotIn("13", str(cm.exception))
+
+    def test_valid_write_is_byte_identical_to_the_pre_change_output(self):
+        self.build()
+        self.assertEqual(hashlib.sha256((self.d / "o/x.jsonl").read_bytes()).hexdigest(),
+                         "5ecbb3f6473cea8a6fea7b1f8af66cd600640ccb1f0822b9cd6893ab8f44e038")
+        expected = ('{\n  "product": "atlas",\n  "rows": 2,\n  "dropped": 0,\n  "dropped_detail": [],\n'
+                    '  "off_topic_ratio": 0.5,\n  "sha256": "5ecbb3f6473cea8a6fea7b1f8af66cd600640ccb1f0822b9cd6893ab8f44e038",\n'
+                    '  "train_locally_only": true,\n  "path": ' + __import__("json").dumps(str(self.d / "o/x.jsonl")) +
+                    ',\n  "warnings": []\n}')  # exact manifest text as written before this change (the path varies per run)
+        self.assertEqual((self.d / "o/x.jsonl.manifest.json").read_text(), expected)
+
     def test_symlinked_manifest_is_refused_before_any_write(self):
         (self.d / "o").mkdir()
         os.symlink(self.victim, self.d / "o/x.jsonl.manifest.json")

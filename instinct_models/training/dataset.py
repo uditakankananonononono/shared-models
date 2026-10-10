@@ -97,7 +97,15 @@ def _check_output_target(path: Path) -> None:
 def _write_atomic(path: Path, text: str) -> None:
     """Write via a fresh temp file in the same directory, then rename over the target (never a partial file at the target)."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    tmp.unlink(missing_ok=True)  # stale or planted file/symlink at our own temp name: remove the name (never follows a link), then create exclusively
+    try:
+        if stat.S_ISDIR(tmp.lstat().st_mode):  # lstat: a symlink to a directory is a link, handled by unlink below
+            raise ValueError(f"output temp path is a directory: {tmp.name}")
+    except FileNotFoundError:
+        pass
+    try:
+        tmp.unlink(missing_ok=True)  # stale or planted file/symlink at our own temp name: remove the name (never follows a link), then create exclusively
+    except OSError:
+        raise ValueError(f"cannot clear output temp path: {tmp.name}") from None
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o666)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:

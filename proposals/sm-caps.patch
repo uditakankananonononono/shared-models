@@ -1,0 +1,247 @@
+diff --git a/instinct_models/health.py b/instinct_models/health.py
+index 5c6219f..d4217b7 100644
+--- a/instinct_models/health.py
++++ b/instinct_models/health.py
+@@ -9,11 +9,43 @@ from __future__ import annotations
+ 
+ import http.client
+ import json
++import time
+ import urllib.error
+ import urllib.request
+ import urllib.parse
+ 
+ 
++DEFAULT_MODEL_LIST_MAX_BYTES = 64 * 1024 * 1024  # /models listings (HF router); override with probe(max_bytes=)
++DEFAULT_SMALL_MAX_BYTES = 8 * 1024 * 1024  # whoami and other small replies
++
++
++def _check_max_bytes(value) -> int:
++    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
++        raise ValueError("max_bytes must be a positive integer")
++    return value
++
++
++def _read_capped(resp, max_bytes: int, timeout: float, clock=time.monotonic) -> bytes:
++    """Body read with a size cap and a whole-body deadline equal to ``timeout`` (read1; clock checked before each read and after
++    every read including the terminal empty one). Chunk framing, header and trailer drip are NOT bounded by this deadline.
++    Errors are generic ValueErrors with no body, URL or size detail; probe() already turns ValueError into an error entry."""
++    deadline = clock() + timeout
++    chunks: list[bytes] = []
++    total = 0
++    while True:
++        if clock() > deadline:
++            raise ValueError("response too slow")
++        chunk = resp.read1(min(65536, max_bytes + 1 - total))
++        if clock() > deadline:
++            raise ValueError("response too slow")
++        if not chunk:
++            return b"".join(chunks)
++        total += len(chunk)
++        if total > max_bytes:
++            raise ValueError("response too large")
++        chunks.append(chunk)
++
++
+ class _NoRedirect(urllib.request.HTTPRedirectHandler):
+     """Never send a health credential beyond the explicitly configured URL."""
+ 
+@@ -30,7 +62,8 @@ def _key_safe(url: str) -> bool:
+         return False
+ 
+ 
+-def _get(url: str, api_key: str | None, timeout: float) -> dict:
++def _get(url: str, api_key: str | None, timeout: float, max_bytes: int = DEFAULT_SMALL_MAX_BYTES) -> dict:
++    _check_max_bytes(max_bytes)  # before any network use
+     h = {"User-Agent": "instinct-models"}
+     if api_key and (not isinstance(api_key, str) or not api_key.isascii() or not api_key.isprintable() or any(c.isspace() for c in api_key)):
+         raise ValueError("API key contains characters that cannot be sent in a header")  # checked first: http.client's own error would echo the key
+@@ -40,7 +73,7 @@ def _get(url: str, api_key: str | None, timeout: float) -> dict:
+         h["Authorization"] = f"Bearer {api_key}"
+     opener = urllib.request.build_opener(_NoRedirect())
+     with opener.open(urllib.request.Request(url, headers=h), timeout=timeout) as r:
+-        return json.loads(r.read().decode())
++        return json.loads(_read_capped(r, max_bytes, timeout).decode())
+ 
+ 
+ def hf_token_valid(token: str | None, timeout: float = 15) -> bool | str:
+@@ -57,12 +90,13 @@ def hf_token_valid(token: str | None, timeout: float = 15) -> bool | str:
+         return "unreachable: malformed response"
+ 
+ 
+-def probe(base_url: str, model: str | None, api_key: str | None = None, timeout: float = 15) -> dict:
++def probe(base_url: str, model: str | None, api_key: str | None = None, timeout: float = 15,
++          max_bytes: int = DEFAULT_MODEL_LIST_MAX_BYTES) -> dict:
+     """Never raises. ok=True means the server answered (and, on HF, the token is valid)."""
+     if not isinstance(base_url, str):
+         return {"base_url": None, "ok": False, "error": "base_url must be text"}
+     try:
+-        data = _get(base_url.rstrip("/") + "/models", api_key, timeout)
++        data = _get(base_url.rstrip("/") + "/models", api_key, timeout, max_bytes)
+     except urllib.error.HTTPError as e:
+         return {"base_url": base_url, "ok": False, "error": f"HTTP {e.code}"}
+     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+diff --git a/instinct_models/providers.py b/instinct_models/providers.py
+index 4a23bc2..c41f728 100644
+--- a/instinct_models/providers.py
++++ b/instinct_models/providers.py
+@@ -1,6 +1,7 @@
+ """Local/self-hosted model providers and explicitly enabled hosted routes."""
+ from __future__ import annotations
+ 
++import functools
+ import json
+ import re
+ import math
+@@ -15,6 +16,7 @@ from typing import Any
+ from urllib.parse import urlsplit
+ 
+ LOCAL, HOSTED = "local", "hosted"
++DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024  # provider bodies; override per provider with max_response_bytes=
+ 
+ 
+ class ProviderError(RuntimeError):
+@@ -42,13 +44,44 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
+         raise ProviderError(f"endpoint redirected (HTTP {code}); refusing redirect")
+ 
+ 
+-def http_json(url: str, body: dict, headers: dict, timeout: float) -> dict:
++def _check_max_bytes(value) -> int:
++    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
++        raise ValueError("max_response_bytes must be a positive integer")
++    return value
++
++
++def _read_capped(resp, max_bytes: int, timeout: float, clock: Callable[[], float] = time.monotonic) -> bytes:
++    """Read a response body with a size cap and a whole-body deadline equal to ``timeout``.
++
++    Uses read1 (one underlying read per call on a NON-chunked body) and checks the monotonic clock before each read and
++    after every read, including the terminal empty read, so a delayed EOF cannot slip through. The per-socket-operation timeout
++    set by urlopen stays in force. Chunk framing, header and trailer drip are NOT bounded by this deadline. Errors are generic
++    and carry no body, URL or size detail."""
++    deadline = clock() + timeout
++    chunks: list[bytes] = []
++    total = 0
++    while True:
++        if clock() > deadline:
++            raise ProviderError("provider response too slow")
++        chunk = resp.read1(min(65536, max_bytes + 1 - total))
++        if clock() > deadline:
++            raise ProviderError("provider response too slow")
++        if not chunk:
++            return b"".join(chunks)
++        total += len(chunk)
++        if total > max_bytes:
++            raise ProviderError("provider response too large")
++        chunks.append(chunk)
++
++
++def http_json(url: str, body: dict, headers: dict, timeout: float, max_bytes: int = DEFAULT_MAX_RESPONSE_BYTES) -> dict:
+     """No redirects and no request, URL, bearer or response bodies in errors."""
++    _check_max_bytes(max_bytes)  # before any request or network use
+     req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                  headers={"Content-Type": "application/json", **headers})
+     try:
+         with urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect()).open(req, timeout=timeout) as resp:
+-            return json.loads(resp.read().decode())
++            return json.loads(_read_capped(resp, max_bytes, timeout).decode())
+     except (ValueError, RecursionError) as exc:
+         raise ProviderError("provider returned invalid JSON") from exc
+     except urllib.error.HTTPError as exc:
+@@ -107,10 +140,13 @@ def _key_safe_url(url: str) -> bool:
+ 
+ class _OpenAICompat(Provider):
+     def __init__(self, base_url: str | None, model: str | None, api_key: str | None = None,
+-                 transport: Transport = http_json, timeout: float = 120, *, trusted_remote: bool = False, allow_cleartext_remote: bool = False):
++                 transport: Transport = http_json, timeout: float = 120, *, trusted_remote: bool = False, allow_cleartext_remote: bool = False,
++                 max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES):
+         self.trusted_remote = trusted_remote
+         self.allow_cleartext_remote = allow_cleartext_remote
+         self.base_url, self.model, self.api_key, self.transport, self.timeout = (base_url or "").rstrip("/"), model, api_key, transport, timeout
++        if _check_max_bytes(max_response_bytes) != DEFAULT_MAX_RESPONSE_BYTES and (transport is http_json or transport is _openclaw_http):
++            self.transport = functools.partial(transport, max_bytes=max_response_bytes)  # custom transports keep their own limits
+ 
+     def allows_private(self) -> bool:
+         if self.locality != LOCAL:
+@@ -222,9 +258,10 @@ class HermesLocal(_OpenAICompat):
+         return super().chat(messages, tools=tools, max_tokens=max_tokens)
+ 
+ 
+-def _openclaw_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
++def _openclaw_http(url: str, body: dict, headers: dict, timeout: float, max_bytes: int = DEFAULT_MAX_RESPONSE_BYTES) -> dict:
+     """Refuse redirects and keep privileged payloads out of errors."""
+-    return http_json(url, body, headers, timeout)
++    _check_max_bytes(max_bytes)  # before any request or network use
++    return http_json(url, body, headers, timeout, max_bytes)
+ 
+ 
+ 
+@@ -257,9 +294,10 @@ class InklingHFRouter(_OpenAICompat):
+     """Inkling through the Hugging Face router with her HF_TOKEN. Hosted: never used for private tasks."""
+     name, locality = "inkling-hf-router", HOSTED
+ 
+-    def __init__(self, model: str, token: str | None = None, transport: Transport = http_json, timeout: float = 120):
++    def __init__(self, model: str, token: str | None = None, transport: Transport = http_json, timeout: float = 120,
++                 max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES):
+         super().__init__("https://router.huggingface.co/v1", model, token if token is not None else os.environ.get("HF_TOKEN"),
+-                         transport, timeout)
++                         transport, timeout, max_response_bytes=max_response_bytes)
+ 
+     def available(self) -> bool:
+         return bool(self.model and self.api_key)
+@@ -408,11 +446,12 @@ def _jev_opener() -> urllib.request.OpenerDirector:
+     return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoTransportRedirect())
+ 
+ 
+-def _jev_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
++def _jev_http(url: str, body: dict, headers: dict, timeout: float, max_bytes: int = DEFAULT_MAX_RESPONSE_BYTES) -> dict:
+     """Default Jev transport. Same signature as http_json, but keeps the HTTP status so
+     the caller can retry 429/529 and explain 401/422 precisely. No proxy from the environment
+     (the bearer must not be routed through one), no redirects, finite JSON only, and errors
+     carry the status code only (no response body, no URL, no socket detail)."""
++    _check_max_bytes(max_bytes)  # before any request or network use
+     try:
+         payload = json.dumps(body, allow_nan=False).encode()
+     except (ValueError, TypeError):
+@@ -422,7 +461,7 @@ def _jev_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
+     try:
+         with _jev_opener().open(req, timeout=timeout) as resp:
+             # NaN/Infinity (and overflowing floats) anywhere in the response are invalid JSON, as in http_json
+-            return json.loads(resp.read().decode(), parse_constant=_reject_constant, parse_float=_finite_float)
++            return json.loads(_read_capped(resp, max_bytes, timeout).decode(), parse_constant=_reject_constant, parse_float=_finite_float)
+     except urllib.error.HTTPError as exc:
+         raise JevStatusError(exc.code) from None
+     except (ValueError, RecursionError, UnicodeError):
+@@ -556,11 +595,13 @@ class JevEval(Provider):
+     def __init__(self, api_key: str | None = None, model: str = "jev-latest",
+                  transport: Transport = _jev_http, timeout: float = 60,
+                  max_retries: int = 3, sleeper: Callable[[float], None] = time.sleep,
+-                 gateway_api_key: str | None = None):
++                 gateway_api_key: str | None = None, max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES):
+         self.api_key = api_key if api_key is not None else os.environ.get("JEV_API_KEY")
+         self.gateway_api_key = (gateway_api_key if gateway_api_key is not None else
+                                 os.environ.get("INSTINCT_AI_GATEWAY_API_KEY") or os.environ.get("AI_GATEWAY_API_KEY"))
+         self.model, self.transport, self.timeout = model, transport, timeout
++        if _check_max_bytes(max_response_bytes) != DEFAULT_MAX_RESPONSE_BYTES and transport is _jev_http:
++            self.transport = functools.partial(_jev_http, max_bytes=max_response_bytes)  # custom transports keep their own limits
+         self.max_retries, self.sleeper = max_retries, sleeper
+ 
+     def available(self) -> bool:
+diff --git a/tests/test_jev_hardening.py b/tests/test_jev_hardening.py
+index fa7239c..5441aee 100644
+--- a/tests/test_jev_hardening.py
++++ b/tests/test_jev_hardening.py
+@@ -37,8 +37,11 @@ class FakeResponse:
+     def __init__(self, payload: bytes):
+         self.payload = payload
+ 
+-    def read(self):
+-        return self.payload
++    def read1(self, n=-1):
++        # faithful read1: at most n bytes per call, consumed as read, then b"" at EOF
++        chunk = self.payload if n is None or n < 0 else self.payload[:n]
++        self.payload = self.payload[len(chunk):]
++        return chunk
+ 
+     def __enter__(self):
+         return self

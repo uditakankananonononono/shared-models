@@ -25,7 +25,7 @@ Blank lines are ignored. JSON parser recursion failures are skipped with reason
 `unreadable row: RecursionError`. A non-list `tools` value is skipped with reason
 `tools must be a list`. A non-object, non-null `call` is skipped with reason
 `call must be an object or null`. Present non-object `arguments` values,
-including null, false, zero, empty strings and empty lists, are skipped with
+including false, zero, empty strings and empty lists (but NOT an explicit null, which means `{}`), are skipped with
 reason `arguments must be an object`. Missing arguments still default to `{}`.
 A null or missing call still means an off-topic row with no answers.
 Other malformed JSON, missing required fields and wrong top-level shapes retain
@@ -47,13 +47,9 @@ are preserved. List element validation for tools remains with the builder.
 
 The peer must decide whether and where to select this reader, and whether to
 rename/replace the legacy reader in a later integration change. No caller or
-package export has been changed. Explicit null arguments are rejected in this
-candidate rather than normalized to `{}`; this is the strict interpretation of
-"non-object arguments" and is an intentional compatibility change for peer
-review. Absent arguments remain compatible.
+package export has been changed. Explicit null arguments mean `{}` (integrator decision, matching the legacy reader and the dataset builder). Absent arguments remain compatible. Rows are split on `\n` only, so a row containing a raw U+2028 or U+0085 inside a string is read, not split in two.
 
-Python JSON recursion behavior and all assertions are unverified because tests
-were authored but not run. This handles recursion raised by decoding, not a
+The tests were run by the integrator (see the commit and report). This handles recursion raised by decoding, not a
 new maximum-depth policy for parseable input. Byte size, row count and execution
-time limits are outside this unit. No live/hosted calls, services, database,
+time limits are outside this unit: the whole file is read into memory. NaN is accepted as a JSON value. No live/hosted calls, services, database,
 migrations, environment/credential inspection or pushes are part of this work.

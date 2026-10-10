@@ -93,6 +93,16 @@ class HostileAdapterTests(unittest.TestCase):
         self.assertEqual(list(self.log.rows())[0].answers, [{"name": "add_task", "arguments": {}}])
         self.assertEqual(self.log.skipped, [])
 
+    def test_raw_unicode_line_separators_inside_a_row_do_not_split_it(self):
+        for sep in ("\u2028", "\u0085", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"):
+            with self.subTest(sep=repr(sep)):
+                r = record()
+                r["query"] = "a" + sep + "b"
+                self.path.write_text(json.dumps(r, ensure_ascii=False).replace("\\u2028", "\u2028") + "\n", encoding="utf-8")
+                rows = list(self.log.rows())
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(self.log.skipped, [])
+
     def test_default_reader_is_the_hardened_one(self):
         from instinct_models.training.adapters import JsonlConfirmationLog
         self.assertIs(JsonlConfirmationLog, HardenedJsonlConfirmationLog)

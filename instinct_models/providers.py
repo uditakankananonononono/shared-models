@@ -416,7 +416,8 @@ def _jev_http(url: str, body: dict, headers: dict, timeout: float) -> dict:
                                  headers={"Content-Type": "application/json", **headers})
     try:
         with _jev_opener().open(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())
+            # NaN/Infinity (and overflowing floats) anywhere in the response are invalid JSON, as in http_json
+            return json.loads(resp.read().decode(), parse_constant=_reject_constant, parse_float=_finite_float)
     except urllib.error.HTTPError as exc:
         raise JevStatusError(exc.code) from None
     except (ValueError, RecursionError, UnicodeError):
@@ -479,7 +480,10 @@ def validate_state(state) -> object:
     Returns the state unchanged; raises ProviderError on the first violation."""
     if isinstance(state, bytes):
         raise ProviderError("state: bytes are not JSON text")
-    _check_finite_json(state, "state")
+    try:
+        _check_finite_json(state, "state")
+    except RecursionError:  # very deep or cyclic state
+        raise ProviderError("state: nesting too deep or cyclic") from None
     return state
 
 
@@ -517,22 +521,17 @@ def validate_jev_questions_strict(questions: dict) -> dict:
 
 
 def validate_usage(usage) -> dict:
-    """Validate a Jev usage block: absent -> {}, otherwise a map of JSON scalars
-    with finite numbers. Raises ProviderError on any other shape."""
+    """Validate a Jev usage block: absent (None) -> {}, otherwise an object with text keys whose
+    values are finite JSON (nested objects and lists are allowed: the real usage shape is not
+    documented, and this runs after a PAID response succeeded). Raises ProviderError otherwise."""
     if usage is None:
         return {}
     if not isinstance(usage, dict):
         raise ProviderError("jev usage must be an object")
-    for k, v in usage.items():
-        if not isinstance(k, str):
-            raise ProviderError("jev usage keys must be text")
-        if v is None or isinstance(v, (bool, str)):
-            continue
-        if isinstance(v, (int, float)):
-            if isinstance(v, float) and not math.isfinite(v):
-                raise ProviderError(f"jev usage {k!r}: non-finite number")
-            continue
-        raise ProviderError(f"jev usage {k!r}: must be a JSON scalar")
+    try:
+        _check_finite_json(usage, "jev usage")
+    except RecursionError:
+        raise ProviderError("jev usage: nesting too deep or cyclic") from None
     return usage
 
 

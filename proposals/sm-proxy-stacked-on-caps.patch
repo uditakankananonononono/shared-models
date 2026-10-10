@@ -1,0 +1,13 @@
+diff --git a/instinct_models/health.py b/instinct_models/health.py
+index d4217b7..014c88e 100644
+--- a/instinct_models/health.py
++++ b/instinct_models/health.py
+@@ -71,7 +71,7 @@ def _get(url: str, api_key: str | None, timeout: float, max_bytes: int = DEFAULT
+         raise ValueError("refusing to send an API key over plain http to a non-loopback host")
+     if api_key:
+         h["Authorization"] = f"Bearer {api_key}"
+-    opener = urllib.request.build_opener(_NoRedirect())
++    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+     with opener.open(urllib.request.Request(url, headers=h), timeout=timeout) as r:
+         return json.loads(_read_capped(r, max_bytes, timeout).decode())
+ 

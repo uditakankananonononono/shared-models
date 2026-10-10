@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import math
 import os
 import time
@@ -275,6 +276,8 @@ def fix_needle_engine(fetch_module: Any, env: dict | None = None) -> str | None:
         return None
     current = versions.get(3)
     target = e.get("INSTINCT_NEEDLE_ENGINE_V3")
+    if target and not re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}", target):
+        raise ValueError("INSTINCT_NEEDLE_ENGINE_V3 must look like 3.0.2 (digits and dots only)")
     if target and target != current:
         versions[3] = target
     return versions.get(3)

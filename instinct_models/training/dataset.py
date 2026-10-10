@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Protocol
@@ -84,6 +86,27 @@ def check_row(row: ExampleRow) -> str | None:
     return None
 
 
+def _check_output_target(path: Path) -> None:
+    """Refuse a symlink or non-regular file at an output path (so a planted link is never written through)."""
+    if path.is_symlink():
+        raise ValueError(f"refusing to write through a symlink: {path.name}")
+    if path.exists() and not stat.S_ISREG(path.lstat().st_mode):
+        raise ValueError(f"output path exists and is not a regular file: {path.name}")
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """Write via a fresh temp file in the same directory, then rename over the target (never a partial file at the target)."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o666)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def build_needle_jsonl(dataset: DomainDataset, out_path: str | Path, *, min_off_topic_ratio: float = 0.1) -> dict:
     kept, dropped, off_topic, private = [], [], 0, False
     seen: set[str] = set()
@@ -121,13 +144,21 @@ def build_needle_jsonl(dataset: DomainDataset, out_path: str | Path, *, min_off_
         raise ValueError("no usable rows after filtering")
     ratio = off_topic / len(kept)
     out = Path(out_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path = Path(str(out) + ".manifest.json")
+    if out.parent.is_symlink():
+        raise ValueError("refusing to write into a symlinked output directory")
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+    except (NotADirectoryError, FileExistsError) as exc:
+        raise ValueError("output directory path is blocked by a file") from exc
+    _check_output_target(out)  # both targets are checked before anything is written
+    _check_output_target(manifest_path)
     text = "".join(json.dumps(r, sort_keys=True, ensure_ascii=False) + "\n" for r in kept)
-    out.write_text(text)
+    _write_atomic(out, text)
     manifest = {"product": dataset.product, "rows": len(kept), "dropped": len(dropped), "dropped_detail": dropped[:200],
                 "off_topic_ratio": round(ratio, 3), "sha256": hashlib.sha256(text.encode()).hexdigest(),
                 "train_locally_only": private, "path": str(out),
                 "warnings": ([f"off-topic ratio {ratio:.2f} is below {min_off_topic_ratio}; the tuned model may call tools on everything"]
                              if ratio < min_off_topic_ratio else [])}
-    Path(str(out) + ".manifest.json").write_text(json.dumps(manifest, indent=2))
+    _write_atomic(manifest_path, json.dumps(manifest, indent=2))
     return manifest

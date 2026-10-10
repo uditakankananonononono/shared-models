@@ -1,7 +1,7 @@
 # Dataset output durability contract (SM-PEER-1, revision 3)
 
 Base: `a215196a3eca7dd4e571f853a9d5c91ee9984f05` (`instinct_models/training/dataset.py`, `build_needle_jsonl`).
-Revision 3 incorporates the second peer audit (of `66824c7d8a18dbb8b137798934a82df57288e193`).
+Revision 3 incorporates the second peer audit (of `66824c7d8a18dbb8b137798934a82df57288e193`); revision 4 incorporates the third (of `bada4a9cf3c2a75c76e5c5e1cf1368c3264e45f5`, prep layer only).
 Companion tests: `tests/test_dataset_output_durability.py` (authored, not run).
 Product changes: proposed only, in the separate `dataset-output-durability-proposed.patch` (NOT applied; peer judgment and independent audit gate).
 Current-behavior statements below are READ from the base source, not executed.
@@ -16,9 +16,9 @@ Remaining limits: the refusal is LEXICAL-ONLY with a check/open race - an attack
 ## (b) Planted temp name `.<file>.<pid>.tmp` is a DIRECTORY
 
 Current (read): `_write_atomic` runs `tmp.unlink(missing_ok=True)`; on a planted directory that raises `IsADirectoryError` (or `PermissionError`) - an uncaught `OSError`, not the guard contract's `ValueError` - and the planted directory blocks the build.
-Decision: FIX SUPERSEDED, pending consolidation. The peer's SM-N1 audit queued the same guard (refuse with `ValueError`, leave the directory) and consolidates ONE temp-directory guard; this proposal deliberately does NOT carry its own guard, to avoid landing a duplicate. `test_planted_directory_at_temp_name_is_refused_with_value_error` remains as the behavior specification for the consolidated guard: it passes under SM-N1's guard, and fails under this proposal until consolidation lands.
-Reader view after crash between writes: with the consolidated guard in place the build fails before any rename, so after any crash readers see only the previously committed data/manifest pair; until consolidation lands, base behavior stands.
-Remaining limits: the consolidated guard is a check-then-unlink sequence, so a swap between the check and the unlink still races; a permission-denied unlink or path (e.g. a non-writable parent directory - on POSIX, unlink permission comes from the parent, not the file) still raises an uncaught `PermissionError` (OSError, not ValueError); a same-pid planted directory denies the run (availability, not integrity); other non-regular files (FIFO, socket) retain base unlink behavior.
+Decision: FIX LANDED via the peer's SM-N1 consolidation (base `50e4c1babb29ab6517cfbb904ef0808ec8524f7b`): a directory at the temp name is a name-only `ValueError` and is never removed. This proposal deliberately carries NO guard of its own - exactly one S_ISDIR guard exists, N1's - and N1's docstring (guarantee + lstat limitation) is carried verbatim in the combined patch. `test_planted_directory_at_temp_name_is_refused_with_value_error` now PASSES at base and stays as the regression spec for the consolidated guard.
+Reader view after crash between writes: with the consolidated guard in place the build fails before any rename, so after any crash readers see only the previously committed data/manifest pair.
+Remaining limits (N1's own docstring, carried verbatim): the guard is a check-then-unlink sequence, so a swap between the check and the unlink still races; a permission-denied CLEARING unlink is wrapped into a name-only `ValueError` (on POSIX, unlink permission comes from the parent directory, not the file); only a `PermissionError` from the guard's own `lstat` remains unnormalized; a same-pid planted directory denies the run (availability, not integrity); other non-regular files (FIFO, socket) retain base unlink behavior.
 
 ## (c) Data replaced atomically, manifest write fails
 
@@ -32,7 +32,7 @@ Remaining limits: rollback is NOT crash-durable and no such claim is made - roll
 Current (read): `os.replace` gives atomicity but no `fsync` of file or directory happens anywhere.
 Decision: FIX, scoped precisely. `_write_atomic` flushes and fsyncs the temp file before that file's rename and fsyncs the containing directory after that file's rename (`os.name == "posix"` only). The temp-cleanup unlink is guarded so a cleanup failure never masks the primary write error.
 Reader view after crash between writes: the claim is PER-FILE fsync ordering ONLY - each file's contents are written out before its rename and its directory is fsynced after - but whether a rename survives a crash landing between that rename and its directory fsync is platform-dependent, so after a crash a reader may see either generation of either file and must validate the manifest `sha256` (pair mismatch detectable, not prevented; NO crash proof is offered).
-Remaining limits: storage that lies about fsync (some drives, RAID caches, NFS) can still lose data; Windows directory fsync is unsupported and skipped - the fsync-ordering test runs on every platform with platform-adjusted expected events, while the two directory-fsync-failure probes (data phase and manifest phase) are POSIX-gated with `skipUnless(os.name == "posix")` because the phase they inject exists only where directory fsync happens; pair consistency across a crash remains per case (c).
+Remaining limits: storage that lies about fsync (some drives, RAID caches, NFS) can still lose data; Windows directory fsync is unsupported and skipped - the fsync-ordering test runs on every platform with platform-adjusted expected events, while the two directory-fsync-failure probes (data phase and manifest phase) and the strengthened independent-restoration probe are POSIX-gated with `skipUnless(os.name == "posix")` because the phase they inject exists only where directory fsync happens; pair consistency across a crash remains per case (c).
 
 ## Compatibility
 

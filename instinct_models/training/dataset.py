@@ -106,21 +106,33 @@ def _fsync_dir(directory: Path) -> None:
 _IS_POSIX = os.name == "posix"  # module constant so tests can exercise the non-POSIX branch without breaking pathlib
 
 
-def _is_root_owned_symlink(path: Path) -> bool:
-    """A root-owned symlink (macOS /var -> /private/var, /tmp, /etc; Linux /var/run) cannot be planted by an
-    unprivileged user. POSIX only: Windows reports st_uid 0 for everything, so it would exempt every link there."""
-    return _IS_POSIX and path.lstat().st_uid == 0
+def _is_trusted_system_symlink(path: Path, _depth: int = 0) -> bool:
+    """COMPATIBILITY EXCEPTION, not a safety proof. Based on REPORTED ownership and mode only: the link is root-owned
+    (st_uid == 0) and sits in a parent that is root-owned and not group/other-writable (macOS /var -> /private/var,
+    /tmp, /etc live in /; Linux /var/run in /var). This is NOT a verified system location, NOT a protected parent or
+    target chain, and NOT no-follow access: the write goes through the link's destination, whose directory contents and
+    permissions are not inspected, and a race between check and use remains. It does follow the link's own target chain
+    (a link or ancestor of the target that is itself a symlink must also qualify, to a depth of 8), so a root-owned link
+    pointing at a user-owned symlink is refused. POSIX only: Windows reports st_uid 0 for everything."""
+    if not _IS_POSIX or _depth > 8:
+        return False
+    link, parent = path.lstat(), path.parent.lstat()
+    if not (link.st_uid == 0 and parent.st_uid == 0 and not (parent.st_mode & 0o022)):
+        return False
+    target = Path(os.path.normpath(path.parent / os.readlink(path)))
+    return all(not q.is_symlink() or _is_trusted_system_symlink(q, _depth + 1) for q in (target, *target.parents))
 
 
 def _check_no_symlink_ancestors(directory: Path) -> None:
-    """Refuse when the output directory is a symlink, or when any ancestor is a symlink that is not root-owned
-    (lexical check; see docs/dataset-output-durability-contract.md). The immediate directory is refused even if root-owned."""
+    """Refuse when the output directory is a symlink, or when any ancestor is a symlink that does not pass
+    _is_trusted_system_symlink. Lexical check with a check/open race; see docs/dataset-output-durability-contract.md.
+    The immediate directory is refused even if it looks like such a link."""
     for p in (directory, *directory.parents):
         if p.is_symlink():
             if p == directory:
                 raise ValueError("refusing to write into a symlinked output directory")
-            if _is_root_owned_symlink(p):
-                continue  # keep walking: a non-root link higher up must still be refused
+            if _is_trusted_system_symlink(p):
+                continue  # keep walking: a non-qualifying link higher up must still be refused
             raise ValueError(f"refusing to write through a symlinked ancestor directory: {p}")
 
 

@@ -1,0 +1,96 @@
+diff --git a/scripts/inkling/serve_llamacpp.sh b/scripts/inkling/serve_llamacpp.sh
+index 5b1d34a..5f875d1 100755
+--- a/scripts/inkling/serve_llamacpp.sh
++++ b/scripts/inkling/serve_llamacpp.sh
+@@ -27,12 +27,61 @@ if [ "$(git rev-parse HEAD)" != "$PIN_SHA" ]; then
+   rm -rf "$DIR/build"   # any existing build is of a different source; rebuild from the pin
+ fi
+ [ "$(git rev-parse HEAD)" = "$PIN_SHA" ] || die "HEAD is not $PIN_SHA after checkout"
++# HEAD==PIN is not enough: refuse a modified tree (tracked changes or untracked files outside build/).
++# Nothing is cleaned automatically, so local work is never destroyed.
++DIRTY="$(git status --porcelain -- . ':(exclude)build')"
++[ -z "$DIRTY" ] || die "llama.cpp tree at $DIR is dirty; refusing to build. Offending paths: $(printf '%s' "$DIRTY" | head -n 5 | tr '\n' ';')"
+ cd - >/dev/null
+-if [ ! -x "$DIR/build/bin/llama-server" ]; then
++# Build stamp: the build is reused only if it was made from this exact commit and these options.
++STAMP="$DIR/build/.inkling-build-stamp"
++WANT_STAMP="$PIN_SHA GGML_CUDA=$CUDA"
++HAVE_STAMP=""
++if [ -f "$STAMP" ]; then HAVE_STAMP="$(cat "$STAMP")"; fi
++if [ ! -x "$DIR/build/bin/llama-server" ] || [ "$HAVE_STAMP" != "$WANT_STAMP" ]; then
++  rm -rf "$DIR/build"
+   cmake "$DIR" -B "$DIR/build" -DBUILD_SHARED_LIBS=OFF -DGGML_CUDA="$CUDA" || die "cmake configure failed"
+   cmake --build "$DIR/build" --config Release -j --target llama-server || die "build failed"
++  printf '%s\n' "$WANT_STAMP" > "$STAMP" || die "could not write build stamp"
++fi
++# Weights pin. llama-server -hf has no revision syntax (":QUANT" is a quant selector); it resolves the repo's
++# "main" branch. See docs/inkling-input-pins-evidence.md. Two modes:
++#  - INKLING_GGUF_DIR set: serve local shards from that directory, each verified against the pinned sha256 below.
++#  - otherwise: refuse to start unless main still points at the pinned commit, then use -hf (a narrow race remains).
++MODEL_REPO="unsloth/Inkling-Small-GGUF"
++MODEL_REV="1a19ef82883cb7b9c581b93c30ea252dabbf658d"
++SHARDS=""
++case "$QUANT" in
++  UD-Q2_K_XL)
++    SHARDS="${SHARDS}66bfa27a88b457cebff967b449599fc412f094dc84d682fb90a5d6586d2897ff  Inkling-Small-UD-Q2_K_XL-00001-of-00003.gguf\n"
++    SHARDS="${SHARDS}6a81a926cb7383e3dd2ca4d83ff90228403425875137ac2264df8cfab9bd8b8a  Inkling-Small-UD-Q2_K_XL-00002-of-00003.gguf\n"
++    SHARDS="${SHARDS}5692c6150bd58d2c05ab49cd7e975edbb026866045cb912788110135469f4c12  Inkling-Small-UD-Q2_K_XL-00003-of-00003.gguf\n"
++    ;;
++  UD-Q3_K_XL)
++    SHARDS="${SHARDS}110190a3c20fbc6d9783125184e470ab7479a79bee7bdf4b5ceda2a6a736f496  Inkling-Small-UD-Q3_K_XL-00001-of-00004.gguf\n"
++    SHARDS="${SHARDS}8df5f2d79e206f7edfc811303c352734c95dc05a2e6c7bc0192c967fdd783d7f  Inkling-Small-UD-Q3_K_XL-00002-of-00004.gguf\n"
++    SHARDS="${SHARDS}6078bcbe08ad005feb3cfd87dd2a21258101197bcefee9d7d6c65eb94317f4bb  Inkling-Small-UD-Q3_K_XL-00003-of-00004.gguf\n"
++    SHARDS="${SHARDS}dd0f2e32d7ca2fabb7b1c40e8bcbc1f951e8271c42b31f8c318c002b7cdc4209  Inkling-Small-UD-Q3_K_XL-00004-of-00004.gguf\n"
++    ;;
++  UD-Q4_K_XL)
++    SHARDS="${SHARDS}a51ac3f439198f2817219edd582be4b600c273be24e78cbd58ebff982d9f007e  Inkling-Small-UD-Q4_K_XL-00001-of-00005.gguf\n"
++    SHARDS="${SHARDS}ce586d0d77c0f31d4a137ae3682f1b2748149dbe15344db7a72328ef758835cc  Inkling-Small-UD-Q4_K_XL-00002-of-00005.gguf\n"
++    SHARDS="${SHARDS}1a7edf29bda1d278b4668e1a082d7db634b845a53ea58c918a8cea1f9006c21c  Inkling-Small-UD-Q4_K_XL-00003-of-00005.gguf\n"
++    SHARDS="${SHARDS}376f67568438da96b10566730e8a9e17e3f665ab1b9d82eba48ec33708b172f7  Inkling-Small-UD-Q4_K_XL-00004-of-00005.gguf\n"
++    SHARDS="${SHARDS}71fff4727f0fbecba426cd75e62b4194779cf1488666b5d4bc040ca4227b4b04  Inkling-Small-UD-Q4_K_XL-00005-of-00005.gguf\n"
++    ;;
++  *) die "no pinned weights manifest for INKLING_QUANT=$QUANT (pinned: UD-Q2_K_XL UD-Q3_K_XL UD-Q4_K_XL)" ;;
++esac
++if [ -n "${INKLING_GGUF_DIR:-}" ]; then
++  (cd "$INKLING_GGUF_DIR" && printf "$SHARDS" | sha256sum -c -) || die "GGUF shards in $INKLING_GGUF_DIR do not match the pinned sha256 values"
++  FIRST_SHARD="$INKLING_GGUF_DIR/$(printf "$SHARDS" | head -n 1 | sed 's/^[0-9a-f]*  //')"
++  MODEL_ARGS=(-m "$FIRST_SHARD")
++else
++  CUR="$(curl -fsS "https://huggingface.co/api/models/$MODEL_REPO/refs" | python3 -c 'import sys,json; print([b["targetCommit"] for b in json.load(sys.stdin)["branches"] if b["name"]=="main"][0])')" \
++    || die "could not read $MODEL_REPO refs"
++  [ "$CUR" = "$MODEL_REV" ] || die "$MODEL_REPO main is now $CUR, not pinned $MODEL_REV; re-review and update MODEL_REV"
++  MODEL_ARGS=(-hf "$MODEL_REPO:$QUANT")
+ fi
+ export LLAMA_CACHE="${LLAMA_CACHE:-$HOME/.cache/unsloth/Inkling-Small-GGUF}"
+-exec "$DIR/build/bin/llama-server" -hf "unsloth/Inkling-Small-GGUF:$QUANT" \
++exec "$DIR/build/bin/llama-server" "${MODEL_ARGS[@]}" \
+   --alias inkling-small --host 127.0.0.1 --port "$PORT" --jinja \
+   --temp 1.0 --top-p 1.0 --min-p 0.0
+diff --git a/scripts/inkling/serve_vllm.sh b/scripts/inkling/serve_vllm.sh
+index 25310e1..0290673 100755
+--- a/scripts/inkling/serve_vllm.sh
++++ b/scripts/inkling/serve_vllm.sh
+@@ -12,13 +12,22 @@ VLLM_IMAGE="${INKLING_VLLM_IMAGE:-vllm/vllm-openai:v0.31.0@sha256:c1c9f6fd5c109b
+ # SECURITY (unchanged behavior, reviewed): --privileged gives the container near-host access, and
+ # --trust-remote-code runs Python code shipped in the model repo. Run only on a dedicated GPU host and
+ # only against the pinned model repo. Neither flag was changed by the pinning patch.
+-# NOTE: the model weights (thinkingmachines/Inkling-Small-NVFP4) are NOT revision-pinned here.
++# Model weights pin: HF commit of thinkingmachines/Inkling-Small-NVFP4 (main, observed 2026-10-10T06:58Z via
++# https://huggingface.co/api/models/thinkingmachines/Inkling-Small-NVFP4 "sha"). See docs/inkling-input-pins-evidence.md.
++# vLLM v0.31.0 --revision / --code-revision / --tokenizer-revision all accept a commit id; the code revision
++# matters because --trust-remote-code executes code from the model repo. Override: INKLING_MODEL_REV (40 hex).
++MODEL_REV="${INKLING_MODEL_REV:-b6a99534467840620d411e4cd4ad5819b2610d9c}"
++if ! [[ "$MODEL_REV" =~ ^[0-9a-f]{40}$ ]]; then
++  echo "serve_vllm.sh: FATAL: INKLING_MODEL_REV must be a full 40-hex commit id, got '$MODEL_REV'" >&2
++  exit 1
++fi
+ TP="${INKLING_TP:-2}"
+ PORT="${INKLING_PORT:-8000}"
+ exec docker run --gpus all --privileged --ipc=host -p "$PORT:8000" \
+   -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+   -e VLLM_USE_V2_MODEL_RUNNER=1 -e FLASH_ATTENTION_CUTE_DSL_CACHE_ENABLED=1 \
+   "$VLLM_IMAGE" thinkingmachines/Inkling-Small-NVFP4 \
++  --revision "$MODEL_REV" --code-revision "$MODEL_REV" --tokenizer-revision "$MODEL_REV" \
+   --trust-remote-code --tokenizer-mode inkling \
+   --kernel-config.enable_flashinfer_autotune=False \
+   --tensor-parallel-size "$TP" \

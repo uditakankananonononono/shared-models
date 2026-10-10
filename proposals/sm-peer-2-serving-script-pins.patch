@@ -1,5 +1,5 @@
 diff --git a/scripts/inkling/serve_llamacpp.sh b/scripts/inkling/serve_llamacpp.sh
-index 5b1d34a..5f875d1 100755
+index 5b1d34a..cce0f1f 100755
 --- a/scripts/inkling/serve_llamacpp.sh
 +++ b/scripts/inkling/serve_llamacpp.sh
 @@ -27,12 +27,61 @@ if [ "$(git rev-parse HEAD)" != "$PIN_SHA" ]; then
@@ -29,31 +29,31 @@ index 5b1d34a..5f875d1 100755
 +#  - otherwise: refuse to start unless main still points at the pinned commit, then use -hf (a narrow race remains).
 +MODEL_REPO="unsloth/Inkling-Small-GGUF"
 +MODEL_REV="1a19ef82883cb7b9c581b93c30ea252dabbf658d"
-+SHARDS=""
++SHARDS=()
 +case "$QUANT" in
 +  UD-Q2_K_XL)
-+    SHARDS="${SHARDS}66bfa27a88b457cebff967b449599fc412f094dc84d682fb90a5d6586d2897ff  Inkling-Small-UD-Q2_K_XL-00001-of-00003.gguf\n"
-+    SHARDS="${SHARDS}6a81a926cb7383e3dd2ca4d83ff90228403425875137ac2264df8cfab9bd8b8a  Inkling-Small-UD-Q2_K_XL-00002-of-00003.gguf\n"
-+    SHARDS="${SHARDS}5692c6150bd58d2c05ab49cd7e975edbb026866045cb912788110135469f4c12  Inkling-Small-UD-Q2_K_XL-00003-of-00003.gguf\n"
++    SHARDS+=("66bfa27a88b457cebff967b449599fc412f094dc84d682fb90a5d6586d2897ff  Inkling-Small-UD-Q2_K_XL-00001-of-00003.gguf")
++    SHARDS+=("6a81a926cb7383e3dd2ca4d83ff90228403425875137ac2264df8cfab9bd8b8a  Inkling-Small-UD-Q2_K_XL-00002-of-00003.gguf")
++    SHARDS+=("5692c6150bd58d2c05ab49cd7e975edbb026866045cb912788110135469f4c12  Inkling-Small-UD-Q2_K_XL-00003-of-00003.gguf")
 +    ;;
 +  UD-Q3_K_XL)
-+    SHARDS="${SHARDS}110190a3c20fbc6d9783125184e470ab7479a79bee7bdf4b5ceda2a6a736f496  Inkling-Small-UD-Q3_K_XL-00001-of-00004.gguf\n"
-+    SHARDS="${SHARDS}8df5f2d79e206f7edfc811303c352734c95dc05a2e6c7bc0192c967fdd783d7f  Inkling-Small-UD-Q3_K_XL-00002-of-00004.gguf\n"
-+    SHARDS="${SHARDS}6078bcbe08ad005feb3cfd87dd2a21258101197bcefee9d7d6c65eb94317f4bb  Inkling-Small-UD-Q3_K_XL-00003-of-00004.gguf\n"
-+    SHARDS="${SHARDS}dd0f2e32d7ca2fabb7b1c40e8bcbc1f951e8271c42b31f8c318c002b7cdc4209  Inkling-Small-UD-Q3_K_XL-00004-of-00004.gguf\n"
++    SHARDS+=("110190a3c20fbc6d9783125184e470ab7479a79bee7bdf4b5ceda2a6a736f496  Inkling-Small-UD-Q3_K_XL-00001-of-00004.gguf")
++    SHARDS+=("8df5f2d79e206f7edfc811303c352734c95dc05a2e6c7bc0192c967fdd783d7f  Inkling-Small-UD-Q3_K_XL-00002-of-00004.gguf")
++    SHARDS+=("6078bcbe08ad005feb3cfd87dd2a21258101197bcefee9d7d6c65eb94317f4bb  Inkling-Small-UD-Q3_K_XL-00003-of-00004.gguf")
++    SHARDS+=("dd0f2e32d7ca2fabb7b1c40e8bcbc1f951e8271c42b31f8c318c002b7cdc4209  Inkling-Small-UD-Q3_K_XL-00004-of-00004.gguf")
 +    ;;
 +  UD-Q4_K_XL)
-+    SHARDS="${SHARDS}a51ac3f439198f2817219edd582be4b600c273be24e78cbd58ebff982d9f007e  Inkling-Small-UD-Q4_K_XL-00001-of-00005.gguf\n"
-+    SHARDS="${SHARDS}ce586d0d77c0f31d4a137ae3682f1b2748149dbe15344db7a72328ef758835cc  Inkling-Small-UD-Q4_K_XL-00002-of-00005.gguf\n"
-+    SHARDS="${SHARDS}1a7edf29bda1d278b4668e1a082d7db634b845a53ea58c918a8cea1f9006c21c  Inkling-Small-UD-Q4_K_XL-00003-of-00005.gguf\n"
-+    SHARDS="${SHARDS}376f67568438da96b10566730e8a9e17e3f665ab1b9d82eba48ec33708b172f7  Inkling-Small-UD-Q4_K_XL-00004-of-00005.gguf\n"
-+    SHARDS="${SHARDS}71fff4727f0fbecba426cd75e62b4194779cf1488666b5d4bc040ca4227b4b04  Inkling-Small-UD-Q4_K_XL-00005-of-00005.gguf\n"
++    SHARDS+=("a51ac3f439198f2817219edd582be4b600c273be24e78cbd58ebff982d9f007e  Inkling-Small-UD-Q4_K_XL-00001-of-00005.gguf")
++    SHARDS+=("ce586d0d77c0f31d4a137ae3682f1b2748149dbe15344db7a72328ef758835cc  Inkling-Small-UD-Q4_K_XL-00002-of-00005.gguf")
++    SHARDS+=("1a7edf29bda1d278b4668e1a082d7db634b845a53ea58c918a8cea1f9006c21c  Inkling-Small-UD-Q4_K_XL-00003-of-00005.gguf")
++    SHARDS+=("376f67568438da96b10566730e8a9e17e3f665ab1b9d82eba48ec33708b172f7  Inkling-Small-UD-Q4_K_XL-00004-of-00005.gguf")
++    SHARDS+=("71fff4727f0fbecba426cd75e62b4194779cf1488666b5d4bc040ca4227b4b04  Inkling-Small-UD-Q4_K_XL-00005-of-00005.gguf")
 +    ;;
 +  *) die "no pinned weights manifest for INKLING_QUANT=$QUANT (pinned: UD-Q2_K_XL UD-Q3_K_XL UD-Q4_K_XL)" ;;
 +esac
 +if [ -n "${INKLING_GGUF_DIR:-}" ]; then
-+  (cd "$INKLING_GGUF_DIR" && printf "$SHARDS" | sha256sum -c -) || die "GGUF shards in $INKLING_GGUF_DIR do not match the pinned sha256 values"
-+  FIRST_SHARD="$INKLING_GGUF_DIR/$(printf "$SHARDS" | head -n 1 | sed 's/^[0-9a-f]*  //')"
++  (cd "$INKLING_GGUF_DIR" && printf '%s\n' "${SHARDS[@]}" | sha256sum -c -) || die "GGUF shards in $INKLING_GGUF_DIR do not match the pinned sha256 values"
++  FIRST_SHARD="$INKLING_GGUF_DIR/${SHARDS[0]#*  }"
 +  MODEL_ARGS=(-m "$FIRST_SHARD")
 +else
 +  CUR="$(curl -fsS "https://huggingface.co/api/models/$MODEL_REPO/refs" | python3 -c 'import sys,json; print([b["targetCommit"] for b in json.load(sys.stdin)["branches"] if b["name"]=="main"][0])')" \

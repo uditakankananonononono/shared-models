@@ -65,6 +65,11 @@ class ProposedPatchTests(unittest.TestCase):
     def test_llamacpp_shards_have_sha256(self):
         self.assertGreaterEqual(len(re.findall(r"[0-9a-f]{64}  Inkling-Small-UD-", ADDED)), 12)
 
+    def test_shard_manifest_is_an_array_not_a_printf_format_string(self):
+        self.assertIn("SHARDS=()", ADDED)
+        self.assertIn('printf \'%s\\n\' "${SHARDS[@]}"', ADDED)
+        self.assertNotIn('printf "$SHARDS', ADDED)
+
     def test_no_silent_fallback_added(self):
         self.assertNotIn("|| " + "true", ADDED)
 

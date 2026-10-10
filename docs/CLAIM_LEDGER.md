@@ -1,7 +1,7 @@
 # Claim ledger (shared-models)
 
 Labels: VERIFIED (a test in this repo exercises it and passes), SCOPED (true only within the stated limit), UNSUPPORTED (no evidence here), NOT BUILT.
-Last checked against the branch tip with `python3 -m unittest discover -s tests` (117 tests, fakes only, no network).
+Last checked against the branch tip with `python3 -m unittest discover -s tests` (see `python3 -m unittest discover -s tests`; 180 tests at main e2fea28f, fakes and loopback test servers only, no external network).
 
 | Claim | Label | Evidence / limit |
 |---|---|---|

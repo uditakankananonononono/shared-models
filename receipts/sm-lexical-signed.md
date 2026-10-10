@@ -55,3 +55,18 @@ Product target content is identical between these bases, checked with git diff.
 No excluded source was read. Proposal bytes unchanged; no product edits applied.
 Historical or peer-reported test results do not transfer. Tests/mutants/runtime
 remain NOT RUN for this repinned identity. Peer owns fresh execution/verdict.
+
+## Applied at landing (integrator, 2026-10-10)
+
+The proposal (proposals/sm-lexical-signed-UNAPPLIED.patch, applied with `git apply --unidiff-zero`; kept as the peer's authored
+artifact) was APPLIED by the integrator as a separate commit on main dcfa10e8. Measured by the integrator: before application
+the new test file fails 16 subtests/methods and the suite is 353 with 16 failures; after application the full suite is 353/353
+OK (pytest 356 passed, 228 subtests). Synthetic local proof only. The signed/standalone-token numeric parsing is a behavior
+change in lexical extraction: attached or date-like tokens are omitted rather than parsed by substring.
+
+Exact change applied to instinct_models/lexical.py: 4 insertions, 2 deletions. (1) `_NUM` becomes a signed pattern with
+standalone-token boundaries: `(?<![\w.+-])[+-]?\d+(?:\.\d+)?(?![\w.+-])`. (2) a `numeric_grounded` flag, set when the full
+standalone token matched, lets that value pass the final grounding gate instead of the normalized-value substring test.
+Behavior change: signed numbers now parse as signed (-12 stays -12, where the base made it +12); tokens attached to other
+characters or date-like (2026-10-15) are omitted instead of being matched by substring. Before application: 16 failures of
+353 (the 7 new test methods, with subtests). After: 353/353 unittest, 356 passed with 228 subtests under pytest.

@@ -103,12 +103,24 @@ def _fsync_dir(directory: Path) -> None:
         os.close(fd)
 
 
+_IS_POSIX = os.name == "posix"  # module constant so tests can exercise the non-POSIX branch without breaking pathlib
+
+
+def _is_root_owned_symlink(path: Path) -> bool:
+    """A root-owned symlink (macOS /var -> /private/var, /tmp, /etc; Linux /var/run) cannot be planted by an
+    unprivileged user. POSIX only: Windows reports st_uid 0 for everything, so it would exempt every link there."""
+    return _IS_POSIX and path.lstat().st_uid == 0
+
+
 def _check_no_symlink_ancestors(directory: Path) -> None:
-    """Refuse when the output directory or ANY of its ancestors is a symlink (lexical check; see docs/dataset-output-durability-contract.md)."""
+    """Refuse when the output directory is a symlink, or when any ancestor is a symlink that is not root-owned
+    (lexical check; see docs/dataset-output-durability-contract.md). The immediate directory is refused even if root-owned."""
     for p in (directory, *directory.parents):
         if p.is_symlink():
             if p == directory:
                 raise ValueError("refusing to write into a symlinked output directory")
+            if _is_root_owned_symlink(p):
+                continue  # keep walking: a non-root link higher up must still be refused
             raise ValueError(f"refusing to write through a symlinked ancestor directory: {p}")
 
 

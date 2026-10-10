@@ -72,6 +72,21 @@ class Intake(unittest.TestCase):
         self.p.write_bytes(b"\n")
         self.assertEqual(list(self.log().rows()), [])
 
+    # --- newlines
+    def test_cr_only_and_crlf_logs_still_read(self):
+        a, b = line(id="a").rstrip("\n"), line(id="b").rstrip("\n")
+        for name, sep in (("cr", "\r"), ("crlf", "\r\n"), ("lf", "\n")):
+            with self.subTest(sep=name):
+                self.p.write_bytes((a + sep + b + sep).encode())
+                lg = self.log()
+                self.assertEqual([r.source_ref for r in lg.rows()], ["a", "b"])
+                self.assertEqual(lg.skipped, [])
+
+    def test_unicode_separators_inside_a_string_still_not_boundaries(self):
+        self.p.write_text(json.dumps(rec(query="a\u2028b\x85c"), ensure_ascii=False) + "\n", encoding="utf-8")
+        rows = list(self.log().rows())
+        self.assertEqual([r.query for r in rows], ["a\u2028b\x85c"])
+
     # --- size cap
     def test_cap_boundary(self):
         data = line().encode()
@@ -111,6 +126,32 @@ class Intake(unittest.TestCase):
         with mock.patch("instinct_models.training.adapters.os.fstat", lambda fd: Small(real(fd))):
             with self.assertRaisesRegex(ValueError, "larger than"):
                 list(self.log(max_bytes=len(data) - 1).rows())
+
+    def test_read_is_bounded_to_cap_plus_one_and_growth_still_refused(self):
+        data = line().encode()
+        self.p.write_bytes(data)
+        cap = len(data) - 1
+        calls = []
+        real_open = open
+
+        class Spy:
+            def __init__(self, f):
+                self._f = f
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                self._f.close()
+            def fileno(self):
+                return self._f.fileno()
+            def read(self, *a):
+                calls.append(a)
+                return self._f.read(*a)
+        small = type("S", (), {"st_size": 1})()
+        with mock.patch("instinct_models.training.adapters.open", lambda *a, **k: Spy(real_open(*a, **k)), create=True), \
+                mock.patch("instinct_models.training.adapters.os.fstat", lambda fd: small):  # looked small, then "grew"
+            with self.assertRaisesRegex(ValueError, "larger than"):
+                list(self.log(max_bytes=cap).rows())
+        self.assertEqual(calls, [(cap + 1,)])
 
     def test_bad_max_bytes_refused(self):
         for bad in (0, -1, True, 1.5, "9"):

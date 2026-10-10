@@ -58,16 +58,27 @@ migrations, environment/credential inspection or pushes are part of this work.
 
 - UTF-16: a file that starts with a UTF-16 BOM (FF FE / FE FF), or whose first 64 bytes are NUL-interleaved ASCII, raises a
   file-level ValueError telling the user to re-save as UTF-8 (PowerShell `>` writes UTF-16). UTF-16 is NOT decoded. The
-  message echoes no content. Detection is a heuristic: UTF-16 text that is not mostly ASCII in its first 64 bytes and has no
-  BOM is not recognized and falls to the generic "not valid UTF-8" error. A UTF-32 BOM also trips the UTF-16 message.
+  message echoes no content. Detection is a heuristic: a no-BOM UTF-16 file whose first 64
+  bytes are not NUL-interleaved ASCII is not recognized. Such a file may be valid UTF-8 bytes, in which case it is processed
+  as ordinary UTF-8 text (typically 0 rows plus per-line JSON skips), NOT rejected with a file-level error; only bytes that
+  are not valid UTF-8 reach the generic "not valid UTF-8" error. A UTF-32 BOM also trips the UTF-16 message.
 - Size cap: constructor `max_bytes` (default 256 MiB). The size is read with fstat on the open descriptor and the read is
   itself bounded to max_bytes+1, so a file that grows after the check is still refused. This is a guard against huge files,
-  not a streaming reader: decoding and splitting hold the text, so peak memory is a few times the cap.
-- Non-finite numbers: NaN, Infinity, -Infinity and out-of-range floats such as 1e999 anywhere in a row (arguments, query,
-  tools) skip that row with reason "non-finite number (NaN or Infinity)" and its line number. The builder already dropped
-  such rows later without saying which; the set of trained rows does not change.
+  not a streaming reader: decoding and splitting hold the text, so peak memory is a few times the cap. Only the file read is
+  bounded; other resource limits (row count, row size, JSON nesting beyond RecursionError) are not guarded.
+- Non-finite numbers (INTENTIONAL BEHAVIOR CHANGE): NaN, Infinity, -Infinity and out-of-range floats such as 1e999
+  ANYWHERE in a row now skip that row at read time, with reason "non-finite number (NaN or Infinity)" and its line
+  number. Old vs new, exactly: (1) a row with a non-finite value in a field the reader uses (arguments, query, tools) was
+  read, then dropped later by the builder with no per-line reason; it is now skipped here with one. (2) a row with a
+  non-finite value only in a field the reader DISCARDS (unused metadata) was read AND TRAINED before; it is now skipped,
+  so the set of trained rows can shrink, and a log made only of such rows now fails with "no usable rows after
+  filtering". (3) a non-finite row tagged for another product used to be dropped as foreign by the builder; it now shows
+  up in `skipped` as non-finite, so the per-line attribution of why a row was dropped changed. Rows without non-finite
+  numbers are unaffected.
 - Duplicate ids: rows are never dropped for a repeated `id`. `warnings` (reset on each pass) lists each repeat with its line
   and the line of first sight. Missing, empty, boolean and non-scalar ids are not tracked. Two rows with the same id and
   different content both stay; the downstream dedup is unchanged.
+- Newlines: CRLF and lone CR are normalized to LF before the LF split, as the old text-mode read did (a CR-only log still
+  yields every row); Unicode separators (U+2028, U+0085, ...) are not boundaries.
 - The reader no longer calls Path.read_text; it decodes bytes itself with utf-8-sig (strict). Symlinks are still followed
   (unchanged); this is not a no-follow reader.

@@ -44,8 +44,8 @@ class ProductConfig:
     allow_hosted: bool = False
     trust_remote: bool = False
     allow_cleartext_remote: bool = False
-    jev_api_key: str | None = None
-    extra: dict = field(default_factory=dict)
+    jev_api_key: str | None = field(default=None, repr=False)  # secret: kept in memory, never in the generated repr
+    extra: dict = field(default_factory=dict, repr=False)  # unknown config-file keys may hold secrets, so also kept out of the repr
 
     def __post_init__(self):
         if self.product not in PRODUCTS:

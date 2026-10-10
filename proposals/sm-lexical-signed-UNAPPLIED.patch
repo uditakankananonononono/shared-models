@@ -1,0 +1,12 @@
+--- a/instinct_models/lexical.py
++++ b/instinct_models/lexical.py
+@@ -29 +29 @@
+-_NUM = re.compile(r"\b\d+(?:\.\d+)?\b")
++_NUM = re.compile(r"(?<![\w.+-])[+-]?\d+(?:\.\d+)?(?![\w.+-])")
+@@ -177,0 +178 @@
++            numeric_grounded = False
+@@ -187,0 +189 @@
++                    numeric_grounded = True  # full standalone token matched, not a substring
+@@ -197 +199 @@
+-            if val is not None and str(val).casefold() in query.casefold():
++            if val is not None and (numeric_grounded or str(val).casefold() in query.casefold()):

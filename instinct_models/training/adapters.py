@@ -33,7 +33,7 @@ class JsonlConfirmationLog:
     def rows(self) -> Iterable[ExampleRow]:
         self.skipped = []
         try:
-            text = self.path.read_text(encoding="utf-8", errors="strict")
+            text = self.path.read_text(encoding="utf-8-sig", errors="strict")  # utf-8-sig strips ONE leading BOM (else it breaks row 1); decoding stays strict
         except UnicodeDecodeError:
             # Do not expose offending bytes, log text, or full paths.
             raise ValueError("confirmation log is not valid UTF-8") from None

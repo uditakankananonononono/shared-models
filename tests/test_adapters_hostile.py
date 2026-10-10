@@ -55,8 +55,42 @@ class HostileAdapterTests(unittest.TestCase):
         original = Path.read_text
         with patch.object(Path, "read_text", autospec=True, side_effect=original) as read:
             rows = list(self.log.rows())
-        read.assert_called_once_with(self.path, encoding="utf-8", errors="strict")
+        read.assert_called_once_with(self.path, encoding="utf-8-sig", errors="strict")
         self.assertEqual(rows[0].answers[0]["arguments"], {"title": "café"})
+
+    BOM = b"\xef\xbb\xbf"
+
+    def line(self, **changes):
+        return (json.dumps(record(**changes)) + "\n").encode("utf-8")
+
+    def test_leading_bom_does_not_drop_the_first_row(self):
+        self.path.write_bytes(self.BOM + self.line(id="r1") + self.line(id="r2"))
+        rows = list(self.log.rows())
+        self.assertEqual([r.source_ref for r in rows], ["r1", "r2"])
+        self.assertEqual(self.log.skipped, [])
+
+    def test_file_without_bom_is_unchanged(self):
+        self.path.write_bytes(self.line(id="r1") + self.line(id="r2"))
+        self.assertEqual([r.source_ref for r in self.log.rows()], ["r1", "r2"])
+        self.assertEqual(self.log.skipped, [])
+
+    def test_bom_in_the_middle_of_the_file_is_still_skipped(self):
+        self.path.write_bytes(self.line(id="r1") + self.BOM + self.line(id="r2") + self.line(id="r3"))
+        rows = list(self.log.rows())
+        self.assertEqual([r.source_ref for r in rows], ["r1", "r3"])
+        self.assertEqual(self.log.skipped, [{"source_ref": "owner.jsonl:2", "reason": "unreadable row: JSONDecodeError"}])
+
+    def test_bom_then_invalid_utf8_is_still_the_file_level_value_error(self):
+        self.path.write_bytes(self.BOM + self.line(id="r1") + b"\xffPRIVATE-CONTENT\n")
+        with self.assertRaises(ValueError) as caught:
+            list(self.log.rows())
+        self.assertNotIn("PRIVATE-CONTENT", str(caught.exception))
+
+    def test_double_bom_strips_only_one(self):
+        self.path.write_bytes(self.BOM + self.BOM + self.line(id="r1") + self.line(id="r2"))
+        rows = list(self.log.rows())
+        self.assertEqual([r.source_ref for r in rows], ["r2"])
+        self.assertEqual(self.log.skipped, [{"source_ref": "owner.jsonl:1", "reason": "unreadable row: JSONDecodeError"}])
 
     def test_deep_json_is_skipped_and_next_row_survives(self):
         # Construct as text, not json.dumps, so test setup itself cannot recurse.

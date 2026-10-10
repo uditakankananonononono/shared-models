@@ -72,6 +72,17 @@ class Intake(unittest.TestCase):
         self.p.write_bytes(b"\n")
         self.assertEqual(list(self.log().rows()), [])
 
+    # --- raw non-ASCII bytes (the JSON-escaped hostile-suite test is blind to the decode codec)
+    def test_raw_non_ascii_utf8_bytes_decode_exactly_under_an_adverse_locale(self):
+        raw = (json.dumps(rec(query="add task café 日本 \U0001f600", call={"name": "add_task", "arguments": {"title": "café"}}), ensure_ascii=False) + "\n").encode("utf-8")
+        self.assertIn("café".encode("utf-8"), raw)  # really raw bytes, not \u escapes
+        self.assertNotIn(b"\\u", raw)
+        self.p.write_bytes(raw)
+        with mock.patch("locale.getpreferredencoding", return_value="ascii"):
+            rows = list(self.log().rows())
+        self.assertEqual(rows[0].query, "add task café 日本 \U0001f600")
+        self.assertEqual(rows[0].answers[0]["arguments"], {"title": "café"})
+
     # --- newlines
     def test_cr_only_and_crlf_logs_still_read(self):
         a, b = line(id="a").rstrip("\n"), line(id="b").rstrip("\n")

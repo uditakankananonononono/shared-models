@@ -76,7 +76,7 @@ migrations, environment/credential inspection or pushes are part of this work.
   up in `skipped` as non-finite, so the per-line attribution of why a row was dropped changed. Rows without non-finite
   numbers are unaffected.
 - Duplicate ids: rows are never dropped for a repeated `id`. `warnings` (reset on each pass) lists each repeat with its line
-  and the line of first sight. Missing, empty, boolean and non-scalar ids are not tracked. Two rows with the same id and
+  and the line of first sight. Warnings cover successfully parsed adapter rows only (a skipped row never warns or registers its id). Only string and integer ids are tracked; missing, empty, boolean, float and other non-scalar ids are not. Two rows with the same id and
   different content both stay; the downstream dedup is unchanged.
 - Newlines: CRLF and lone CR are normalized to LF before the LF split, as the old text-mode read did (a CR-only log still
   yields every row); Unicode separators (U+2028, U+0085, ...) are not boundaries.

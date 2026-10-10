@@ -95,7 +95,11 @@ def _check_output_target(path: Path) -> None:
 
 
 def _write_atomic(path: Path, text: str) -> None:
-    """Write via a fresh temp file in the same directory, then rename over the target (never a partial file at the target)."""
+    """Write via a fresh temp file in the same directory, then rename over the target (never a partial file at the target).
+
+    Guarantee: a directory at the temp name, or an OSError while clearing the temp name, is a name-only ValueError.
+    Limitation, deliberately not widened here: a PermissionError from reading the temp name's status (lstat, e.g. an
+    unreadable parent directory) is not normalized and surfaces as-is, including its path and errno text."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
         if stat.S_ISDIR(tmp.lstat().st_mode):  # lstat: a symlink to a directory is a link, handled by unlink below

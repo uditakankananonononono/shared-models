@@ -101,7 +101,12 @@ class LexicalToolModel:
     @classmethod
     def from_jsonl(cls, path: str | Path, **kw) -> "LexicalToolModel":
         rows = []
-        for n, line in enumerate(Path(path).read_text().splitlines(), 1):
+        try:
+            # utf-8-sig strips one leading BOM; strict decoding; explicit so the locale cannot change the result
+            text = Path(path).read_text(encoding="utf-8-sig", errors="strict")
+        except UnicodeDecodeError:
+            raise ValueError(f"{path}: not valid UTF-8") from None  # no byte value or position
+        for n, line in enumerate(text.split("\n"), 1):  # NOT splitlines(): U+2028/U+0085 can sit raw inside a valid JSON string
             if not line.strip():
                 continue
             try:

@@ -21,7 +21,7 @@ So the project has already decided this rule twice; evaluate.py is the missed th
 Decision: FIX - parse with `text.split("\n")`, carrying a narrowed one-line comment naming only U+0085, U+2028, U+2029. The proposed patch changes exactly one line plus that comment.
 Reader/user view after the fix: a valid row keeps its characters and its line number; an invalid row is still rejected with its true file line.
 Remaining documented limits:
-- `\r\n` files keep working: `split("\n")` leaves a trailing `\r`, which `json.loads` accepts as whitespace and `line.strip()` skips when alone.
+- CRLF files keep working: universal-newline read normalizes them to LF before splitting.
 - `\r`-only (old-Mac) files ALSO keep working (peer audit FIX1): `Path.read_text` reads in universal-newlines mode (`newline=None`), which translates both `\r\n` and lone `\r` to `\n` before either splitter sees the text. There is no CR-only behavior change and no approval tradeoff; a CR-only compat test is included for the auditor to execute.
 - Raw `\x0b`, `\x0c`, `\x1c`-`\x1e` inside a row are invalid JSON either way (they must be escaped); with `split("\n")` they now fail as one line with a truer line number instead of splitting first.
 - Decoding stays `utf-8` strict; no BOM handling is added here (the confirmation log's BOM case, N2, is a different file and out of scope).
